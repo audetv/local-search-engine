@@ -3,6 +3,7 @@ find_package(Catch2 REQUIRED)
 add_executable(lse_tests
     test_main.cpp
     test_tokenizer.cpp
+    test_stemmer.cpp
 )
 
 target_link_libraries(lse_tests PRIVATE

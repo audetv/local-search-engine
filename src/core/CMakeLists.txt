@@ -1,12 +1,26 @@
-# Core library - no UI dependencies
+file(GLOB STEMMER_C_FILES
+    "${libstemmer_SOURCE_DIR}/src_c/*.c"
+    "${libstemmer_SOURCE_DIR}/runtime/*.c"
+    "${libstemmer_SOURCE_DIR}/libstemmer/*.c"
+)
+
 add_library(lse_core STATIC
     core.cpp
     tokenizer/tokenizer.cpp
+    tokenizer/stemmer.cpp
+    ${STEMMER_C_FILES}
 )
 
 target_include_directories(lse_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${libstemmer_SOURCE_DIR}/include
+    ${libstemmer_SOURCE_DIR}/runtime
+    ${libstemmer_SOURCE_DIR}/src_c
+    ${libstemmer_SOURCE_DIR}/libstemmer
 )
+
+# C-файлы компилируем с подавлением ворнингов
+set_source_files_properties(${STEMMER_C_FILES} PROPERTIES COMPILE_FLAGS "-w")
 
 target_link_libraries(lse_core PUBLIC
     spdlog::spdlog
@@ -19,19 +33,14 @@ target_link_libraries(lse_core PUBLIC
 
 target_compile_features(lse_core PUBLIC cxx_std_23)
 
-# Sanitizers for debug (GCC/Clang only)
 if(ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        target_compile_options(lse_core PRIVATE
-            -fsanitize=address,undefined
-            -fno-omit-frame-pointer
-        )
-        target_link_options(lse_core PRIVATE
-            -fsanitize=address,undefined
-        )
-    elseif(MSVC)
-        target_compile_options(lse_core PRIVATE /fsanitize=address)
-    endif()
+    target_compile_options(lse_core PRIVATE
+        -fsanitize=address,undefined
+        -fno-omit-frame-pointer
+    )
+    target_link_options(lse_core PRIVATE
+        -fsanitize=address,undefined
+    )
 endif()
 
 if(MSVC)
