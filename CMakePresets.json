@@ -61,7 +61,6 @@
         {
             "name": "debug",
             "configurePreset": "debug",
-            "configuration": "Debug",
             "output": {
                 "outputOnFailure": true
             }
@@ -69,7 +68,6 @@
         {
             "name": "release-with-tests",
             "configurePreset": "release-with-tests",
-            "configuration": "Release",
             "output": {
                 "outputOnFailure": true
             }
