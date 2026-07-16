@@ -1,0 +1,73 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "base",
+            "description": "Base configuration with vcpkg toolchain",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+        },
+        {
+            "name": "debug",
+            "inherits": "base",
+            "description": "Debug build with sanitizers",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ENABLE_SANITIZERS": "ON",
+                "BUILD_TESTS": "ON"
+            }
+        },
+        {
+            "name": "release",
+            "inherits": "base",
+            "description": "Optimized release build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ENABLE_SANITIZERS": "OFF",
+                "BUILD_TESTS": "OFF"
+            }
+        },
+        {
+            "name": "release-with-tests",
+            "inherits": "base",
+            "description": "Release build with tests",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ENABLE_SANITIZERS": "OFF",
+                "BUILD_TESTS": "ON"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "debug",
+            "configurePreset": "debug"
+        },
+        {
+            "name": "release",
+            "configurePreset": "release"
+        },
+        {
+            "name": "release-with-tests",
+            "configurePreset": "release-with-tests"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "release-with-tests",
+            "configurePreset": "release-with-tests",
+            "output": {
+                "outputOnFailure": true
+            }
+        }
+    ]
+}

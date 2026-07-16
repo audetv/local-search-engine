@@ -1,0 +1,15 @@
+{
+    "name": "local-search-engine",
+    "version": "1.0.0",
+    "description": "Local full-text search engine for Russian books",
+    "dependencies": [
+        "spdlog",
+        "sqlite3",
+        "pugixml",
+        "curl",
+        "nlohmann-json",
+        "tomlplusplus",
+        "uchardet",
+        "catch2"
+    ]
+}

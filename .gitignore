@@ -1,0 +1,44 @@
+# C++ build artifacts
+build/
+cmake-build-*/
+out/
+*.o
+*.obj
+*.exe
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# vcpkg
+vcpkg_installed/
+
+# Qt generated files
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+*.pro.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Application data
+user_index/
+*.db
+*.log
+
+# Test artifacts
+Testing/
+CTestTestfile.cmake
+
+CMakeUserPresets.json
