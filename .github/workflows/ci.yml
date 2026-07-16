@@ -9,6 +9,7 @@ on:
 jobs:
   build-and-test:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-24.04, windows-2022, macos-14]
         build-type: [debug, release-with-tests]
@@ -16,10 +17,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup CMake
-        uses: lukka/get-cmake@latest
+      - uses: actions/checkout@v5
       
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
@@ -33,5 +31,4 @@ jobs:
         run: cmake --build --preset=${{ matrix.build-type }}
       
       - name: Test
-        if: matrix.build-type == 'release-with-tests' || matrix.build-type == 'debug'
         run: ctest --preset=${{ matrix.build-type }}
