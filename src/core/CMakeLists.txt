@@ -1,5 +1,7 @@
+# Core library - no UI dependencies
 add_library(lse_core STATIC
     core.cpp
+    tokenizer/tokenizer.cpp
 )
 
 target_include_directories(lse_core PUBLIC
