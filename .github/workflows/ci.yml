@@ -11,7 +11,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-2022, macos-14]
+        include:
+          - os: ubuntu-24.04
+            cmake-generator: "Ninja"
+          - os: macos-14
+            cmake-generator: "Ninja"
+          - os: windows-2022
+            cmake-generator: "Visual Studio 17 2022"
         build-type: [debug, release-with-tests]
     
     runs-on: ${{ matrix.os }}
@@ -25,7 +31,7 @@ jobs:
           vcpkgJsonGlob: 'vcpkg.json'
       
       - name: Configure
-        run: cmake --preset=${{ matrix.build-type }}
+        run: cmake --preset=${{ matrix.build-type }} -G "${{ matrix.cmake-generator }}"
       
       - name: Build
         run: cmake --build --preset=${{ matrix.build-type }}
