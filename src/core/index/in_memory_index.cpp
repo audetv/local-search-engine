@@ -139,7 +139,7 @@ namespace lse
                                              double idf, double avg_dl) const
     {
         double numerator = tf * (k1 + 1.0);
-        double denominator = tf + k1 * (1.0 - this->b + this->b * (doc_length / avg_dl));
+        double denominator = tf + k1 * (1.0 - b_param + b_param * (doc_length / avg_dl));
         return idf * (numerator / denominator);
     }
 

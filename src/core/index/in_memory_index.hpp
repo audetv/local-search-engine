@@ -88,8 +88,8 @@ namespace lse
                                   double idf, double avg_dl) const;
 
         // Константы BM25
-        static constexpr double k1 = 1.2; // term frequency saturation
-        static constexpr double b = 0.75; // length normalization
+        static constexpr double k1 = 1.2;       // term frequency saturation
+        static constexpr double b_param = 0.75; // length normalization
     };
 
 } // namespace lse
