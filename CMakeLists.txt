@@ -37,36 +37,27 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(libstemmer)
 
-# Собираем libstemmer из исходников — только русский и английский
-add_library(libstemmer_c STATIC
-    # Русский стеммер
-    ${libstemmer_SOURCE_DIR}/src_c/stem_UTF_8_russian.c
-    # Английский стеммер
-    ${libstemmer_SOURCE_DIR}/src_c/stem_UTF_8_english.c
-    # Runtime
-    ${libstemmer_SOURCE_DIR}/runtime/api.c
-    ${libstemmer_SOURCE_DIR}/runtime/utilities.c
-)
-
-target_include_directories(libstemmer_c PUBLIC
-    ${libstemmer_SOURCE_DIR}/include
-    ${libstemmer_SOURCE_DIR}/runtime
-    ${libstemmer_SOURCE_DIR}/src_c
-    ${libstemmer_SOURCE_DIR}/libstemmer
-)
-
-if(MSVC)
-    target_compile_options(libstemmer_c PRIVATE /W0)
-else()
-    target_compile_options(libstemmer_c PRIVATE -w)
-endif()
-
 # Add core library
 add_subdirectory(src/core)
 
 # Main executable
 add_executable(local-search-engine src/main.cpp)
 target_link_libraries(local-search-engine PRIVATE lse_core)
+
+# Sanitizers for main executable
+if(ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(local-search-engine PRIVATE
+            -fsanitize=address,undefined
+            -fno-omit-frame-pointer
+        )
+        target_link_options(local-search-engine PRIVATE
+            -fsanitize=address,undefined
+        )
+    elseif(MSVC)
+        target_compile_options(local-search-engine PRIVATE /fsanitize=address)
+    endif()
+endif()
 
 # Положить бинарник рядом с исходниками (удобно)
 set_target_properties(local-search-engine PROPERTIES

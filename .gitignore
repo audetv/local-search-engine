@@ -37,6 +37,8 @@ user_index/
 *.db
 *.log
 
+test_books
+
 # Test artifacts
 Testing/
 CTestTestfile.cmake
