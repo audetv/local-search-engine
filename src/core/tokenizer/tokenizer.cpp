@@ -5,9 +5,37 @@
 namespace lse
 {
 
-    Tokenizer::Tokenizer(std::string_view text, Options opts)
-        : text_(text), opts_(opts)
+    Tokenizer::Tokenizer(std::string_view text, TokenizerOptions opts)
+        : normalized_text_(normalize_text(text)), text_(normalized_text_), opts_(opts)
     {
+    }
+
+    std::string Tokenizer::normalize_text(std::string_view text)
+    {
+        std::string result;
+        result.reserve(text.size());
+
+        for (size_t i = 0; i < text.size(); ++i)
+        {
+            if (text[i] == '\r')
+            {
+                if (i + 1 < text.size() && text[i + 1] == '\n')
+                {
+                    result += '\n';
+                    ++i; // пропускаем следующий \n
+                }
+                else
+                {
+                    result += '\n'; // одиночный \r → \n
+                }
+            }
+            else
+            {
+                result += text[i];
+            }
+        }
+
+        return result;
     }
 
     auto Tokenizer::tokenize() -> std::expected<std::vector<Token>, TokenizerError>
@@ -26,8 +54,8 @@ namespace lse
 
         while (it < end)
         {
-            // Пропускаем пробелы и разделители
-            if (*it == ' ' || *it == '\n' || *it == '\r' || *it == '\t')
+            // Пропускаем пробелы и разделители (\r уже нормализован в \n)
+            if (*it == ' ' || *it == '\n' || *it == '\t')
             {
                 if (!current_word.empty())
                 {
@@ -50,9 +78,14 @@ namespace lse
                 continue;
             }
 
-            // Апостроф — пропускаем
+            // Апостроф — разделитель (как пробел)
             if (*it == '\'')
             {
+                if (!current_word.empty())
+                {
+                    tokens.push_back(Token{std::move(current_word), position++});
+                    current_word.clear();
+                }
                 ++it;
                 continue;
             }
@@ -159,6 +192,32 @@ namespace lse
         return cp;
     }
 
+    void Tokenizer::encode_utf8(char32_t cp, std::string &out)
+    {
+        if (cp < 0x80)
+        {
+            out += static_cast<char>(cp);
+        }
+        else if (cp < 0x800)
+        {
+            out += static_cast<char>(0xC0 | (cp >> 6));
+            out += static_cast<char>(0x80 | (cp & 0x3F));
+        }
+        else if (cp < 0x10000)
+        {
+            out += static_cast<char>(0xE0 | (cp >> 12));
+            out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            out += static_cast<char>(0x80 | (cp & 0x3F));
+        }
+        else
+        {
+            out += static_cast<char>(0xF0 | (cp >> 18));
+            out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+            out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            out += static_cast<char>(0x80 | (cp & 0x3F));
+        }
+    }
+
     bool Tokenizer::is_letter(char32_t cp)
     {
         // Кириллица
@@ -209,7 +268,7 @@ namespace lse
         return cp; // уже нижний или не буква
     }
 
-    char32_t Tokenizer::normalize(char32_t cp)
+    char32_t Tokenizer::normalize(char32_t cp) const
     {
         if (opts_.normalize_yo)
         {
@@ -219,36 +278,6 @@ namespace lse
                 return 0x0415; // Ё → Е
         }
         return cp;
-    }
-
-    // Вспомогательная функция для кодирования UTF-8
-    namespace
-    {
-        void encode_utf8(char32_t cp, std::string &out)
-        {
-            if (cp < 0x80)
-            {
-                out += static_cast<char>(cp);
-            }
-            else if (cp < 0x800)
-            {
-                out += static_cast<char>(0xC0 | (cp >> 6));
-                out += static_cast<char>(0x80 | (cp & 0x3F));
-            }
-            else if (cp < 0x10000)
-            {
-                out += static_cast<char>(0xE0 | (cp >> 12));
-                out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-                out += static_cast<char>(0x80 | (cp & 0x3F));
-            }
-            else
-            {
-                out += static_cast<char>(0xF0 | (cp >> 18));
-                out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
-                out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-                out += static_cast<char>(0x80 | (cp & 0x3F));
-            }
-        }
     }
 
 } // namespace lse

@@ -53,7 +53,7 @@ TEST_CASE("Tokenizer: yo normalization", "[tokenizer]")
 
 TEST_CASE("Tokenizer: yo normalization disabled", "[tokenizer]")
 {
-    Tokenizer::Options opts;
+    TokenizerOptions opts;
     opts.normalize_yo = false;
 
     Tokenizer tokenizer("ёлка", opts);
@@ -63,7 +63,7 @@ TEST_CASE("Tokenizer: yo normalization disabled", "[tokenizer]")
     auto &tokens = *result;
 
     REQUIRE(tokens.size() == 1);
-    CHECK(tokens[0].text == "ёлка"); // ё сохраняется
+    CHECK(tokens[0].text == "ёлка");
 }
 
 TEST_CASE("Tokenizer: hyphen splits words", "[tokenizer]")
@@ -81,7 +81,7 @@ TEST_CASE("Tokenizer: hyphen splits words", "[tokenizer]")
     CHECK(tokens[3].text == "серый");
 }
 
-TEST_CASE("Tokenizer: apostrophe removed", "[tokenizer]")
+TEST_CASE("Tokenizer: apostrophe splits words", "[tokenizer]")
 {
     Tokenizer tokenizer("д'Артаньян");
     auto result = tokenizer.tokenize();
@@ -89,8 +89,31 @@ TEST_CASE("Tokenizer: apostrophe removed", "[tokenizer]")
     REQUIRE(result.has_value());
     auto &tokens = *result;
 
-    REQUIRE(tokens.size() == 1);
-    CHECK(tokens[0].text == "дартаньян");
+    REQUIRE(tokens.size() == 2);
+    CHECK(tokens[0].text == "д");
+    CHECK(tokens[1].text == "артаньян");
+}
+
+TEST_CASE("Tokenizer: query 'д Артаньян' matches 'д\\'Артаньян'", "[tokenizer]")
+{
+    // Поисковый запрос
+    Tokenizer query_tokenizer("д Артаньян");
+    auto query_result = query_tokenizer.tokenize();
+    REQUIRE(query_result.has_value());
+    auto &query_tokens = *query_result;
+
+    // Текст книги
+    Tokenizer book_tokenizer("д'Артаньян");
+    auto book_result = book_tokenizer.tokenize();
+    REQUIRE(book_result.has_value());
+    auto &book_tokens = *book_result;
+
+    // Токены должны совпадать
+    REQUIRE(query_tokens.size() == book_tokens.size());
+    for (size_t i = 0; i < query_tokens.size(); ++i)
+    {
+        CHECK(query_tokens[i].text == book_tokens[i].text);
+    }
 }
 
 TEST_CASE("Tokenizer: digits preserved", "[tokenizer]")
@@ -137,11 +160,12 @@ TEST_CASE("Tokenizer: multi-line text", "[tokenizer]")
     REQUIRE(result.has_value());
     auto &tokens = *result;
 
-    REQUIRE(tokens.size() == 4);
+    REQUIRE(tokens.size() == 5);
     CHECK(tokens[0].text == "первая");
     CHECK(tokens[1].text == "строка");
     CHECK(tokens[2].text == "вторая");
-    CHECK(tokens[3].text == "третья");
+    CHECK(tokens[3].text == "строка");
+    CHECK(tokens[4].text == "третья");
 }
 
 TEST_CASE("Tokenizer: Greek letters for scientific texts", "[tokenizer]")
@@ -152,7 +176,7 @@ TEST_CASE("Tokenizer: Greek letters for scientific texts", "[tokenizer]")
     REQUIRE(result.has_value());
     auto &tokens = *result;
 
-    REQUIRE(tokens.size() == 6);
+    REQUIRE(tokens.size() == 5);
     CHECK(tokens[0].text == "альфа");
     CHECK(tokens[1].text == "α");
     CHECK(tokens[2].text == "и");
