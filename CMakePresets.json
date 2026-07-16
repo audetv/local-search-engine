@@ -5,6 +5,7 @@
             "name": "base",
             "description": "Base configuration with vcpkg toolchain",
             "hidden": true,
+            "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
         },
