@@ -94,7 +94,7 @@ TEST_CASE("Tokenizer: apostrophe splits words", "[tokenizer]")
     CHECK(tokens[1].text == "артаньян");
 }
 
-TEST_CASE("Tokenizer: query 'д Артаньян' matches 'д\\'Артаньян'", "[tokenizer]")
+TEST_CASE("Tokenizer: apostrophe works as delimiter like space", "[tokenizer]")
 {
     // Поисковый запрос
     Tokenizer query_tokenizer("д Артаньян");
