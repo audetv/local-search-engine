@@ -8,6 +8,7 @@ add_library(lse_core STATIC
     core.cpp
     tokenizer/tokenizer.cpp
     tokenizer/stemmer.cpp
+    index/in_memory_index.cpp
     ${STEMMER_C_FILES}
 )
 

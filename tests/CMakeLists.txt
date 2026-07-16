@@ -4,6 +4,7 @@ add_executable(lse_tests
     test_main.cpp
     test_tokenizer.cpp
     test_stemmer.cpp
+    test_in_memory_index.cpp
 )
 
 target_link_libraries(lse_tests PRIVATE
