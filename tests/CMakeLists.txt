@@ -1,5 +1,8 @@
+find_package(Catch2 REQUIRED)
+
 add_executable(lse_tests
     test_main.cpp
+    test_tokenizer.cpp
 )
 
 target_link_libraries(lse_tests PRIVATE
@@ -9,5 +12,16 @@ target_link_libraries(lse_tests PRIVATE
 
 target_compile_features(lse_tests PRIVATE cxx_std_23)
 
-# Регистрируем тест в CTest
-add_test(NAME lse_tests COMMAND lse_tests)
+# Sanitizers for debug (sync with lse_core)
+if(ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(lse_tests PRIVATE
+        -fsanitize=address,undefined
+        -fno-omit-frame-pointer
+    )
+    target_link_options(lse_tests PRIVATE
+        -fsanitize=address,undefined
+    )
+endif()
+
+include(Catch)
+catch_discover_tests(lse_tests)
