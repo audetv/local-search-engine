@@ -9,6 +9,7 @@ add_library(lse_core STATIC
     tokenizer/tokenizer.cpp
     tokenizer/stemmer.cpp
     index/in_memory_index.cpp
+    parser/txt_parser.cpp
     ${STEMMER_C_FILES}
 )
 
@@ -23,6 +24,8 @@ target_include_directories(lse_core PUBLIC
 # C-файлы компилируем с подавлением ворнингов
 set_source_files_properties(${STEMMER_C_FILES} PROPERTIES COMPILE_FLAGS "-w")
 
+find_package(uchardet CONFIG REQUIRED)
+
 target_link_libraries(lse_core PUBLIC
     spdlog::spdlog
     unofficial::sqlite3::sqlite3
@@ -30,6 +33,7 @@ target_link_libraries(lse_core PUBLIC
     CURL::libcurl
     nlohmann_json::nlohmann_json
     tomlplusplus::tomlplusplus
+    uchardet::libuchardet  # uchardet уже здесь
 )
 
 target_compile_features(lse_core PUBLIC cxx_std_23)
