@@ -15,6 +15,7 @@ add_library(lse_core STATIC
     parser/txt_parser.cpp
     parser/fb2_parser.cpp
     parser/docx_parser.cpp
+    chunker/chunker.cpp
     ${STEMMER_C_FILES}
 )
 

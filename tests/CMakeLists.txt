@@ -8,6 +8,7 @@ add_executable(lse_tests
     test_txt_parser.cpp
     test_fb2_parser.cpp
     test_docx_parser.cpp
+    test_chunker.cpp
 )
 
 target_link_libraries(lse_tests PRIVATE
