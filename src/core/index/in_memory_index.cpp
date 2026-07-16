@@ -95,7 +95,7 @@ namespace lse
                 // BM25 для пары (терм, документ)
                 double score = calculateBM25Score(
                     posting.term_freq,
-                    posting.positions.size(), // длина документа = число позиций этого терма
+                    static_cast<uint32_t>(posting.positions.size()), // было: posting.positions.size()
                     idf,
                     avg_doc_length_);
 
@@ -139,7 +139,7 @@ namespace lse
                                              double idf, double avg_dl) const
     {
         double numerator = tf * (k1 + 1.0);
-        double denominator = tf + k1 * (1.0 - b + b * (doc_length / avg_dl));
+        double denominator = tf + k1 * (1.0 - this->b + this->b * (doc_length / avg_dl));
         return idf * (numerator / denominator);
     }
 
