@@ -4,7 +4,7 @@ project(
     LocalSearchEngine
     VERSION 1.0.0
     DESCRIPTION "Local full-text search engine for Russian books"
-    LANGUAGES CXX
+    LANGUAGES C CXX
 )
 
 # C++23 required
@@ -26,6 +26,16 @@ find_package(pugixml CONFIG REQUIRED)
 find_package(CURL REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
+find_package(minizip CONFIG REQUIRED)
+
+# libstemmer (Snowball stemmer) via FetchContent
+include(FetchContent)
+FetchContent_Declare(
+    libstemmer
+    URL https://snowballstem.org/dist/libstemmer_c-2.2.0.tar.gz
+    URL_HASH SHA256=b941d9fe9cf36b4e2f8d3873cd4d8b8775bd94867a1df8d8c001bb8b688377c3
+)
+FetchContent_MakeAvailable(libstemmer)
 
 # Add core library
 add_subdirectory(src/core)
@@ -33,6 +43,21 @@ add_subdirectory(src/core)
 # Main executable
 add_executable(local-search-engine src/main.cpp)
 target_link_libraries(local-search-engine PRIVATE lse_core)
+
+# Sanitizers for main executable
+if(ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(local-search-engine PRIVATE
+            -fsanitize=address,undefined
+            -fno-omit-frame-pointer
+        )
+        target_link_options(local-search-engine PRIVATE
+            -fsanitize=address,undefined
+        )
+    elseif(MSVC)
+        target_compile_options(local-search-engine PRIVATE /fsanitize=address)
+    endif()
+endif()
 
 # Положить бинарник рядом с исходниками (удобно)
 set_target_properties(local-search-engine PROPERTIES

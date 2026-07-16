@@ -1,10 +1,35 @@
+file(GLOB STEMMER_C_FILES
+    "${libstemmer_SOURCE_DIR}/src_c/*.c"
+    "${libstemmer_SOURCE_DIR}/runtime/*.c"
+    "${libstemmer_SOURCE_DIR}/libstemmer/*.c"
+)
+
+find_package(uchardet CONFIG REQUIRED)
+find_package(minizip CONFIG REQUIRED)
+
 add_library(lse_core STATIC
     core.cpp
+    tokenizer/tokenizer.cpp
+    tokenizer/stemmer.cpp
+    index/in_memory_index.cpp
+    parser/txt_parser.cpp
+    parser/fb2_parser.cpp
+    parser/docx_parser.cpp
+    chunker/chunker.cpp
+    book_indexer.cpp
+    ${STEMMER_C_FILES}
 )
 
 target_include_directories(lse_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${libstemmer_SOURCE_DIR}/include
+    ${libstemmer_SOURCE_DIR}/runtime
+    ${libstemmer_SOURCE_DIR}/src_c
+    ${libstemmer_SOURCE_DIR}/libstemmer
 )
+
+# C-файлы компилируем с подавлением ворнингов
+set_source_files_properties(${STEMMER_C_FILES} PROPERTIES COMPILE_FLAGS "-w")
 
 target_link_libraries(lse_core PUBLIC
     spdlog::spdlog
@@ -13,6 +38,8 @@ target_link_libraries(lse_core PUBLIC
     CURL::libcurl
     nlohmann_json::nlohmann_json
     tomlplusplus::tomlplusplus
+    uchardet::libuchardet
+    $<IF:$<TARGET_EXISTS:MINIZIP::minizip>,MINIZIP::minizip,MINIZIP::minizipstatic>
 )
 
 target_compile_features(lse_core PUBLIC cxx_std_23)
