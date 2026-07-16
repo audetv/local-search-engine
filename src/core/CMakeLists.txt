@@ -4,6 +4,9 @@ file(GLOB STEMMER_C_FILES
     "${libstemmer_SOURCE_DIR}/libstemmer/*.c"
 )
 
+find_package(uchardet CONFIG REQUIRED)
+find_package(minizip CONFIG REQUIRED)
+
 add_library(lse_core STATIC
     core.cpp
     tokenizer/tokenizer.cpp
@@ -11,6 +14,7 @@ add_library(lse_core STATIC
     index/in_memory_index.cpp
     parser/txt_parser.cpp
     parser/fb2_parser.cpp
+    parser/docx_parser.cpp
     ${STEMMER_C_FILES}
 )
 
@@ -25,8 +29,6 @@ target_include_directories(lse_core PUBLIC
 # C-файлы компилируем с подавлением ворнингов
 set_source_files_properties(${STEMMER_C_FILES} PROPERTIES COMPILE_FLAGS "-w")
 
-find_package(uchardet CONFIG REQUIRED)
-
 target_link_libraries(lse_core PUBLIC
     spdlog::spdlog
     unofficial::sqlite3::sqlite3
@@ -34,7 +36,8 @@ target_link_libraries(lse_core PUBLIC
     CURL::libcurl
     nlohmann_json::nlohmann_json
     tomlplusplus::tomlplusplus
-    uchardet::libuchardet  # uchardet уже здесь
+    uchardet::libuchardet
+    $<IF:$<TARGET_EXISTS:MINIZIP::minizip>,MINIZIP::minizip,MINIZIP::minizipstatic>
 )
 
 target_compile_features(lse_core PUBLIC cxx_std_23)

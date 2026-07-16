@@ -7,6 +7,7 @@ add_executable(lse_tests
     test_in_memory_index.cpp
     test_txt_parser.cpp
     test_fb2_parser.cpp
+    test_docx_parser.cpp
 )
 
 target_link_libraries(lse_tests PRIVATE
