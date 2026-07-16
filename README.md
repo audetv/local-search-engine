@@ -18,8 +18,18 @@
 ```bash
 git clone https://github.com/audetv/local-search-engine
 cd local-search-engine
+rm -rf build/debug
 cmake --preset=debug
 cmake --build --preset=debug
+```
+
+## Проверка сборки
+```
+# Запуск приложения
+./build/debug/src/local-search-engine
+
+# Запуск тестов
+ctest --preset=debug
 ```
 
 ## Архитектура
