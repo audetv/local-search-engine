@@ -212,7 +212,10 @@ namespace lse
             data_ = nullptr;
             if (fd_ >= 0)
             {
-                ftruncate(fd_, file_size_);
+                if (ftruncate(fd_, static_cast<off_t>(file_size_)) < 0)
+                {
+                    // Игнорируем ошибку при закрытии, файл уже может быть удалён
+                }
                 ::close(fd_);
                 fd_ = -1;
             }
