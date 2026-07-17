@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstring>
 #include <spdlog/spdlog.h>
+#include <xxhash.h>
 
 namespace lse
 {
@@ -127,7 +128,6 @@ namespace lse
                 LexiconEntry entry;
                 entry.term_hash = read_le<uint64_t>(lex_mmap.data(), entry_offset);
                 entry.df = read_le<uint32_t>(lex_mmap.data(), entry_offset + 12);
-                uint32_t block_count = read_le<uint32_t>(lex_mmap.data(), entry_offset + 16);
                 uint64_t blocks_offset = read_le<uint64_t>(lex_mmap.data(), entry_offset + 24);
                 entry.total_postings_size = read_le<uint64_t>(lex_mmap.data(), entry_offset + 32);
 
@@ -136,7 +136,9 @@ namespace lse
 
                 // Читаем блоки из секции D
                 const uint8_t *blocks_ptr = lex_mmap.data() + blocks_offset;
-                for (uint32_t j = 0; j < block_count; ++j)
+                uint32_t loaded_block_count = read_le<uint32_t>(blocks_ptr, 0); // читаем block_count
+                blocks_ptr += 4;                                                // пропускаем block_count
+                for (uint32_t j = 0; j < loaded_block_count; ++j)
                 {
                     PostingBlock block;
                     block.offset = read_le<uint64_t>(blocks_ptr, 0);
@@ -267,7 +269,7 @@ namespace lse
             if (entry.term_text.empty())
             {
                 entry.term_text = term_text;
-                entry.term_hash = 0; // TODO: xxHash64(term_text)
+                entry.term_hash = XXH64(term_text.c_str(), term_text.size(), 0);
                 entry.df = 0;
                 entry.total_postings_size = 0;
             }

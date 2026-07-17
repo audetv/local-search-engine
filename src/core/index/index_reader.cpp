@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <spdlog/spdlog.h>
+#include <xxhash.h>
 
 namespace lse
 {
@@ -101,36 +102,48 @@ namespace lse
         if (term_count_ == 0)
             return {false, {}, 0};
 
+        uint64_t target_hash = XXH64(term.data(), term.size(), 0);
+
         const uint8_t *data = lexicon_file_.data();
-        const uint8_t *text_start = data + lexicon_data_offset_;
 
-        // Линейный поиск (TODO: бинарный по term_hash)
-        for (uint32_t i = 0; i < term_count_; ++i)
+        // Бинарный поиск по term_hash
+        int64_t left = 0, right = term_count_ - 1;
+        while (left <= right)
         {
-            size_t entry_offset = LEXICON_HEADER_SIZE + i * TERM_ENTRY_SIZE;
-            uint64_t text_offset = read_le<uint64_t>(data, entry_offset + 40);
+            int64_t mid = left + (right - left) / 2;
+            size_t entry_offset = LEXICON_HEADER_SIZE + mid * TERM_ENTRY_SIZE;
 
-            const char *term_text = reinterpret_cast<const char *>(text_start + text_offset);
-            if (term == term_text)
+            uint64_t mid_hash = read_le<uint64_t>(data, entry_offset);
+
+            if (mid_hash < target_hash)
             {
-                uint32_t block_count = read_le<uint32_t>(data, entry_offset + 16);
+                left = mid + 1;
+            }
+            else if (mid_hash > target_hash)
+            {
+                right = mid - 1;
+            }
+            else
+            {
+                // Нашли! Читаем данные терма
                 uint64_t blocks_offset = read_le<uint64_t>(data, entry_offset + 24);
-                uint32_t df = read_le<uint32_t>(data, entry_offset + 12);
 
-                spdlog::debug("findTerm: term='{}', block_count={}, blocks_offset={}, df={}",
-                              term, block_count, blocks_offset, df);
+                spdlog::debug("findTerm: term='{}', entry_offset={}, blocks_offset={}",
+                              term, entry_offset, blocks_offset);
+
+                uint32_t df = read_le<uint32_t>(data, entry_offset + 12);
 
                 std::vector<PostingBlockInfo> blocks;
                 const uint8_t *blocks_ptr = data + blocks_offset;
 
-                for (uint32_t j = 0; j < block_count; ++j)
+                uint32_t loaded_block_count = read_le<uint32_t>(blocks_ptr, 0); // читаем block_count
+                blocks_ptr += 4;                                                // пропускаем block_count
+
+                for (uint32_t j = 0; j < loaded_block_count; ++j)
                 {
                     PostingBlockInfo block;
                     block.offset = read_le<uint64_t>(blocks_ptr, 0);
                     block.size = read_le<uint64_t>(blocks_ptr, 8);
-
-                    spdlog::debug("  block[{}]: offset={}, size={}", j, block.offset, block.size);
-
                     blocks.push_back(block);
                     blocks_ptr += 16;
                 }

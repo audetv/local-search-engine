@@ -12,6 +12,7 @@
         "tomlplusplus",
         "uchardet",
         "catch2",
-        "minizip"
+        "minizip",
+        "xxhash"
     ]
 }
