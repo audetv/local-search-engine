@@ -28,6 +28,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
 find_package(minizip CONFIG REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 # libstemmer (Snowball stemmer) via FetchContent
 include(FetchContent)
