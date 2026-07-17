@@ -44,6 +44,8 @@ target_link_libraries(lse_core PUBLIC
     uchardet::libuchardet
     $<IF:$<TARGET_EXISTS:MINIZIP::minizip>,MINIZIP::minizip,MINIZIP::minizipstatic>
     xxHash::xxhash
+    OpenSSL::SSL
+    OpenSSL::Crypto
 )
 
 target_compile_features(lse_core PUBLIC cxx_std_23)

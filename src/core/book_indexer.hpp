@@ -1,11 +1,14 @@
 #pragma once
 
-#include "index/in_memory_index.hpp"
+#include "index/index_writer.hpp"
+#include "index/index_reader.hpp"
 #include "tokenizer/stemmer.hpp"
+#include "tokenizer/tokenizer.hpp"
 #include "chunker/chunker.hpp"
 #include <filesystem>
 #include <vector>
 #include <string>
+#include <memory>
 
 namespace lse
 {
@@ -20,7 +23,7 @@ namespace lse
     class BookIndexer
     {
     public:
-        BookIndexer(InMemoryIndex &index, Stemmer &stemmer);
+        BookIndexer(IndexWriter &writer, Stemmer &stemmer);
 
         auto indexFile(const std::filesystem::path &file_path)
             -> std::expected<std::vector<BookInfo>, IndexError>;
@@ -32,7 +35,7 @@ namespace lse
         size_t indexedChunks() const { return indexed_chunks_; }
 
     private:
-        InMemoryIndex &index_;
+        IndexWriter &writer_;
         Stemmer &stemmer_;
         TokenizerOptions tokenizer_opts_;
         ChunkerConfig chunker_config_;

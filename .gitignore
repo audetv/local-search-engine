@@ -38,6 +38,7 @@ user_index/
 *.log
 
 test_books
+data
 
 # Test artifacts
 Testing/
