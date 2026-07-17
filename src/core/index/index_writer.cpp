@@ -12,10 +12,10 @@ namespace lse
     constexpr uint32_t META_MAGIC = 0x4C534531;
     constexpr uint32_t LEXICON_MAGIC = 0x4C455831;
     constexpr uint32_t POSTINGS_MAGIC = 0x504F5331;
-    constexpr uint32_t INDEX_VERSION = 1;
+    constexpr uint32_t INDEX_VERSION = 2;
     constexpr size_t META_SIZE = 128;
     constexpr size_t LEXICON_HEADER_SIZE = 16;
-    constexpr size_t TERM_ENTRY_SIZE = 40;
+    constexpr size_t TERM_ENTRY_SIZE = 56;
     constexpr size_t POSTINGS_HEADER_SIZE = 12;
 
     IndexWriter::~IndexWriter()
@@ -127,13 +127,25 @@ namespace lse
                 LexiconEntry entry;
                 entry.term_hash = read_le<uint64_t>(lex_mmap.data(), entry_offset);
                 entry.df = read_le<uint32_t>(lex_mmap.data(), entry_offset + 12);
-                entry.postings_offset = read_le<uint64_t>(lex_mmap.data(), entry_offset + 16);
-                entry.postings_size = read_le<uint64_t>(lex_mmap.data(), entry_offset + 24);
+                uint32_t block_count = read_le<uint32_t>(lex_mmap.data(), entry_offset + 16);
+                uint64_t blocks_offset = read_le<uint64_t>(lex_mmap.data(), entry_offset + 24);
+                entry.total_postings_size = read_le<uint64_t>(lex_mmap.data(), entry_offset + 32);
 
-                uint64_t text_offset = read_le<uint64_t>(lex_mmap.data(), entry_offset + 32);
+                uint64_t text_offset = read_le<uint64_t>(lex_mmap.data(), entry_offset + 40);
                 entry.term_text = reinterpret_cast<const char *>(lex_mmap.data() + data_offset + text_offset);
 
-                lexicon_buffer_[entry.term_text] = entry;
+                // Читаем блоки из секции D
+                const uint8_t *blocks_ptr = lex_mmap.data() + blocks_offset;
+                for (uint32_t j = 0; j < block_count; ++j)
+                {
+                    PostingBlock block;
+                    block.offset = read_le<uint64_t>(blocks_ptr, 0);
+                    block.size = read_le<uint64_t>(blocks_ptr, 8);
+                    entry.blocks.push_back(block);
+                    blocks_ptr += 16;
+                }
+
+                lexicon_buffer_[entry.term_text] = std::move(entry);
             }
         }
 
@@ -150,13 +162,13 @@ namespace lse
         flushLexicon();
         flushMeta();
 
+        postings_file_.flush();
         // Закрываем файлы (flushLexicon уже закрыл lexicon_file_)
         meta_file_.close();
         postings_file_.close();
 
         if (db_)
         {
-            // Форсируем сброс WAL в основную БД перед закрытием
             sqlite3_exec(db_, "PRAGMA wal_checkpoint(TRUNCATE)", nullptr, nullptr, nullptr);
             sqlite3_close(db_);
             db_ = nullptr;
@@ -245,25 +257,25 @@ namespace lse
         // 2. Считаем термы
         auto term_stats = countTerms(tokens);
 
-        // 3. Для каждого терма: обновляем lexicon, дописываем posting
+        // 3. Для каждого терма: добавляем новый блок
         for (const auto &[term_text, stats] : term_stats)
         {
             const auto &[tf, positions] = stats;
 
             // Находим или создаём запись в lexicon
             auto &entry = lexicon_buffer_[term_text];
-            bool is_new_term = entry.term_text.empty();
-            if (is_new_term)
+            if (entry.term_text.empty())
             {
                 entry.term_text = term_text;
                 entry.term_hash = 0; // TODO: xxHash64(term_text)
                 entry.df = 0;
-                entry.postings_offset = 0;
-                entry.postings_size = 0;
+                entry.total_postings_size = 0;
             }
 
-            // Сериализуем posting
+            // Сериализуем новый posting как отдельный блок
             std::vector<uint8_t> posting_data;
+            // doc_count для этого блока = 1
+            writeVarint(posting_data, 1);
             writeVarint(posting_data, doc_id);
             writeVarint(posting_data, tf);
             writeVarint(posting_data, positions.size());
@@ -274,18 +286,20 @@ namespace lse
                 prev_pos = pos;
             }
 
-            // Дописываем в конец postings файла (Баг 2 исправлен: каждый терм получает новое смещение)
+            // Дописываем блок в конец файла
             size_t offset = postings_file_.size();
             size_t new_size = offset + posting_data.size();
             postings_file_.grow(new_size);
             std::memcpy(postings_file_.data() + offset,
                         posting_data.data(), posting_data.size());
 
-            if (entry.postings_size == 0)
-            {
-                entry.postings_offset = offset;
-            }
-            entry.postings_size += posting_data.size();
+            // Добавляем блок к терму
+            entry.blocks.push_back({offset, posting_data.size()});
+
+            spdlog::debug("addDocument: term='{}', postings_file_.size()={}, offset={}, data_size={}",
+                          term_text, postings_file_.size(), offset, posting_data.size());
+
+            entry.total_postings_size += posting_data.size();
             entry.df++;
         }
 
@@ -315,18 +329,26 @@ namespace lse
                   });
 
         // Вычисляем размеры
-        size_t data_size = 0;
+        size_t texts_size = 0;
         for (auto *entry : sorted)
         {
-            data_size += entry->term_text.size() + 1;
+            texts_size += entry->term_text.size() + 1; // +1 за нулевой терминатор
+        }
+
+        size_t blocks_section_size = 0;
+        for (auto *entry : sorted)
+        {
+            blocks_section_size += 4;                         // block_count (uint32)
+            blocks_section_size += entry->blocks.size() * 16; // offset+size по 8 байт каждый
         }
 
         size_t header_size = LEXICON_HEADER_SIZE;
         size_t table_size = sorted.size() * TERM_ENTRY_SIZE;
-        size_t total_size = header_size + table_size + data_size;
+        size_t total_size = header_size + table_size + texts_size + blocks_section_size;
 
         // Закрываем старый lexicon и создаём новый
         lexicon_file_.close();
+        std::filesystem::remove(lexicon_path);
         if (!lexicon_file_.open(lexicon_path, MemoryMappedFile::Mode::CreateNew, total_size))
         {
             return std::unexpected(IndexError::FileError);
@@ -337,8 +359,9 @@ namespace lse
         write_le<uint32_t>(lexicon_file_.data(), 4, static_cast<uint32_t>(sorted.size()));
         write_le<uint64_t>(lexicon_file_.data(), 8, header_size + table_size);
 
-        // Таблица термов
+        // Таблица термов и секции C, D
         uint64_t text_offset = 0;
+
         for (size_t i = 0; i < sorted.size(); ++i)
         {
             auto *entry = sorted[i];
@@ -348,14 +371,20 @@ namespace lse
             write_le<uint32_t>(lexicon_file_.data(), entry_offset + 8,
                                static_cast<uint32_t>(entry->term_text.size()));
             write_le<uint32_t>(lexicon_file_.data(), entry_offset + 12, entry->df);
-            write_le<uint64_t>(lexicon_file_.data(), entry_offset + 16, entry->postings_offset);
-            write_le<uint64_t>(lexicon_file_.data(), entry_offset + 24, entry->postings_size);
-            write_le<uint64_t>(lexicon_file_.data(), entry_offset + 32, text_offset);
+            write_le<uint32_t>(lexicon_file_.data(), entry_offset + 16,
+                               static_cast<uint32_t>(entry->blocks.size()));
+            write_le<uint32_t>(lexicon_file_.data(), entry_offset + 20, 0); // reserved
+            // blocks_offset указывает на массив блоков в секции D
+            // Вычисляется ниже при записи секции D
+            write_le<uint64_t>(lexicon_file_.data(), entry_offset + 24, 0); // временно
+            write_le<uint64_t>(lexicon_file_.data(), entry_offset + 32, entry->total_postings_size);
+            write_le<uint64_t>(lexicon_file_.data(), entry_offset + 40, text_offset);
+            write_le<uint64_t>(lexicon_file_.data(), entry_offset + 48, 0); // reserved2
 
             text_offset += entry->term_text.size() + 1;
         }
 
-        // Тексты термов
+        // Тексты термов (секция C)
         uint8_t *text_start = lexicon_file_.data() + header_size + table_size;
         text_offset = 0;
         for (auto *entry : sorted)
@@ -364,6 +393,47 @@ namespace lse
                         entry->term_text.size());
             text_start[text_offset + entry->term_text.size()] = 0;
             text_offset += entry->term_text.size() + 1;
+        }
+
+        // ОТЛАДКА: проверим, что в блоках перед записью
+        spdlog::debug("flushLexicon: header_size={}, table_size={}, texts_size={}, blocks_section_size={}",
+                      header_size, table_size, texts_size, blocks_section_size);
+        for (auto *entry : sorted)
+        {
+            spdlog::debug("  term='{}', blocks_count={}, total_postings_size={}",
+                          entry->term_text, entry->blocks.size(), entry->total_postings_size);
+            for (const auto &block : entry->blocks)
+            {
+                spdlog::debug("    block: offset={}, size={}", block.offset, block.size);
+            }
+        }
+
+        // Секция D: массивы блоков
+        uint8_t *blocks_start = text_start + texts_size;
+        uint64_t current_blocks_offset = header_size + table_size + texts_size;
+        spdlog::debug("  blocks_start offset in file: {}", current_blocks_offset);
+
+        for (size_t i = 0; i < sorted.size(); ++i)
+        {
+            auto *entry = sorted[i];
+
+            // Обновляем blocks_offset в TermEntry
+            size_t entry_offset = header_size + i * TERM_ENTRY_SIZE;
+            write_le<uint64_t>(lexicon_file_.data(), entry_offset + 24, current_blocks_offset);
+
+            // block_count
+            write_le<uint32_t>(blocks_start, 0, static_cast<uint32_t>(entry->blocks.size()));
+            blocks_start += 4;
+            current_blocks_offset += 4;
+
+            // blocks[]
+            for (const auto &block : entry->blocks)
+            {
+                write_le<uint64_t>(blocks_start, 0, block.offset);
+                write_le<uint64_t>(blocks_start, 8, block.size);
+                blocks_start += 16;
+                current_blocks_offset += 16;
+            }
         }
 
         lexicon_file_.flush();

@@ -4,6 +4,7 @@
 #include "tokenizer/tokenizer.hpp"
 #include "tokenizer/stemmer.hpp"
 #include <filesystem>
+#include <spdlog/spdlog.h>
 
 using namespace lse;
 namespace fs = std::filesystem;
@@ -26,6 +27,8 @@ static auto tokenize_and_stem(const std::string &text, Stemmer &stemmer) -> std:
 
 TEST_CASE("IndexWriter/IndexReader: write and read single document", "[persistence]")
 {
+    spdlog::set_level(spdlog::level::debug); // Включаем debug-логирование
+
     auto index_dir = fs::temp_directory_path() / "test_index_1";
     fs::remove_all(index_dir);
 
@@ -76,6 +79,8 @@ TEST_CASE("IndexWriter/IndexReader: write and read single document", "[persisten
 
 TEST_CASE("IndexWriter/IndexReader: multiple documents", "[persistence]")
 {
+    spdlog::set_level(spdlog::level::debug); // Включаем debug-логирование
+
     auto index_dir = fs::temp_directory_path() / "test_index_2";
     fs::remove_all(index_dir);
 
@@ -121,6 +126,8 @@ TEST_CASE("IndexWriter/IndexReader: multiple documents", "[persistence]")
 
 TEST_CASE("IndexWriter/IndexReader: persistence survives reopen", "[persistence]")
 {
+    spdlog::set_level(spdlog::level::debug); // Включаем debug-логирование
+
     auto index_dir = fs::temp_directory_path() / "test_index_3";
     fs::remove_all(index_dir);
 
@@ -164,6 +171,8 @@ TEST_CASE("IndexWriter/IndexReader: persistence survives reopen", "[persistence]
 
 TEST_CASE("IndexWriter/IndexReader: empty index", "[persistence]")
 {
+    spdlog::set_level(spdlog::level::debug); // Включаем debug-логирование
+
     auto index_dir = fs::temp_directory_path() / "test_index_empty";
     fs::remove_all(index_dir);
 
@@ -189,6 +198,8 @@ TEST_CASE("IndexWriter/IndexReader: empty index", "[persistence]")
 
 TEST_CASE("IndexWriter/IndexReader: filter by genre", "[persistence]")
 {
+    spdlog::set_level(spdlog::level::debug); // Включаем debug-логирование
+
     auto index_dir = fs::temp_directory_path() / "test_index_filter";
     fs::remove_all(index_dir);
 

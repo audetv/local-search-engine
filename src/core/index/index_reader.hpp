@@ -28,6 +28,12 @@ namespace lse
         uint32_t chunk_num;
     };
 
+    struct PostingBlockInfo
+    {
+        uint64_t offset;
+        uint64_t size;
+    };
+
     class IndexReader
     {
     public:
@@ -63,7 +69,6 @@ namespace lse
         double avg_doc_length_ = 0.0;
         uint32_t term_count_ = 0;
         uint64_t lexicon_data_offset_ = 0;
-        uint64_t postings_data_offset_ = 12; // после заголовка
 
         bool is_open_ = false;
 
@@ -71,18 +76,17 @@ namespace lse
         static constexpr double k1 = 1.2;
         static constexpr double b_param = 0.75;
 
-        // Бинарный поиск терма в lexicon
+        // Результат поиска терма в lexicon
         struct LexiconResult
         {
             bool found;
-            uint64_t postings_offset;
-            uint64_t postings_size;
+            std::vector<PostingBlockInfo> blocks;
             uint32_t df;
         };
         auto findTerm(std::string_view term) const -> LexiconResult;
 
-        // Декодировать постинг-лист
-        auto decodePostings(uint64_t offset, uint64_t size) const
+        // Декодировать постинг-лист из списка блоков
+        auto decodePostings(const std::vector<PostingBlockInfo> &blocks) const
             -> std::vector<std::pair<uint64_t, std::pair<uint32_t, std::vector<uint32_t>>>>;
 
         // BM25 score

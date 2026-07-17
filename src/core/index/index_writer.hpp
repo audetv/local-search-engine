@@ -17,6 +17,12 @@ namespace lse
 
     struct Token;
 
+    struct PostingBlock
+    {
+        uint64_t offset;
+        uint64_t size;
+    };
+
     class IndexWriter
     {
     public:
@@ -47,6 +53,8 @@ namespace lse
         // Статистика
         uint64_t docCount() const { return doc_count_; }
 
+        static constexpr size_t TERM_ENTRY_SIZE = 56;
+
     private:
         std::filesystem::path index_dir_;
 
@@ -61,8 +69,8 @@ namespace lse
             uint64_t term_hash;
             std::string term_text;
             uint32_t df = 0;
-            uint64_t postings_offset = 0;
-            uint64_t postings_size = 0;
+            std::vector<PostingBlock> blocks;
+            uint64_t total_postings_size = 0;
         };
         std::unordered_map<std::string, LexiconEntry> lexicon_buffer_;
 

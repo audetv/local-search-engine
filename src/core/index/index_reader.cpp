@@ -12,7 +12,7 @@ namespace lse
     constexpr uint32_t LEXICON_MAGIC = 0x4C455831;
     constexpr uint32_t POSTINGS_MAGIC = 0x504F5331;
     constexpr size_t LEXICON_HEADER_SIZE = 16;
-    constexpr size_t TERM_ENTRY_SIZE = 40;
+    constexpr size_t TERM_ENTRY_SIZE = 56; // v2
 
     IndexReader::~IndexReader()
     {
@@ -84,7 +84,6 @@ namespace lse
 
     void IndexReader::close()
     {
-        // Prepared statements больше не используются
         if (db_)
         {
             sqlite3_close(db_);
@@ -100,68 +99,86 @@ namespace lse
     auto IndexReader::findTerm(std::string_view term) const -> LexiconResult
     {
         if (term_count_ == 0)
-            return {false, 0, 0, 0};
+            return {false, {}, 0};
 
-        // TODO: использовать xxHash64 для бинарного поиска
-        // Пока — линейный поиск по тексту терма (для прототипа)
         const uint8_t *data = lexicon_file_.data();
         const uint8_t *text_start = data + lexicon_data_offset_;
 
-        // Бинарный поиск по term_hash (заглушка — линейный)
+        // Линейный поиск (TODO: бинарный по term_hash)
         for (uint32_t i = 0; i < term_count_; ++i)
         {
             size_t entry_offset = LEXICON_HEADER_SIZE + i * TERM_ENTRY_SIZE;
-            uint64_t text_offset = read_le<uint64_t>(data, entry_offset + 32);
+            uint64_t text_offset = read_le<uint64_t>(data, entry_offset + 40);
 
             const char *term_text = reinterpret_cast<const char *>(text_start + text_offset);
             if (term == term_text)
             {
-                return {
-                    true,
-                    read_le<uint64_t>(data, entry_offset + 16), // postings_offset
-                    read_le<uint64_t>(data, entry_offset + 24), // postings_size
-                    read_le<uint32_t>(data, entry_offset + 12)  // df
-                };
+                uint32_t block_count = read_le<uint32_t>(data, entry_offset + 16);
+                uint64_t blocks_offset = read_le<uint64_t>(data, entry_offset + 24);
+                uint32_t df = read_le<uint32_t>(data, entry_offset + 12);
+
+                spdlog::debug("findTerm: term='{}', block_count={}, blocks_offset={}, df={}",
+                              term, block_count, blocks_offset, df);
+
+                std::vector<PostingBlockInfo> blocks;
+                const uint8_t *blocks_ptr = data + blocks_offset;
+
+                for (uint32_t j = 0; j < block_count; ++j)
+                {
+                    PostingBlockInfo block;
+                    block.offset = read_le<uint64_t>(blocks_ptr, 0);
+                    block.size = read_le<uint64_t>(blocks_ptr, 8);
+
+                    spdlog::debug("  block[{}]: offset={}, size={}", j, block.offset, block.size);
+
+                    blocks.push_back(block);
+                    blocks_ptr += 16;
+                }
+
+                return {true, std::move(blocks), df};
             }
         }
 
-        return {false, 0, 0, 0};
+        return {false, {}, 0};
     }
 
-    auto IndexReader::decodePostings(uint64_t offset, uint64_t size) const
+    auto IndexReader::decodePostings(const std::vector<PostingBlockInfo> &blocks) const
         -> std::vector<std::pair<uint64_t, std::pair<uint32_t, std::vector<uint32_t>>>>
     {
-
         std::vector<std::pair<uint64_t, std::pair<uint32_t, std::vector<uint32_t>>>> result;
-
-        const uint8_t *data = postings_file_.data() + offset;
-        size_t pos = 0;
 
         uint64_t prev_doc_id = 0;
 
-        while (pos < size)
+        for (const auto &block : blocks)
         {
-            // doc_id (дельта)
-            uint64_t doc_id = decode_varint(data, pos) + prev_doc_id;
-            prev_doc_id = doc_id;
+            spdlog::debug("decodePostings: postings_file_.data()={}, block.offset={}, block.size={}, postings_file_.size()={}",
+                          (void *)postings_file_.data(), block.offset, block.size, postings_file_.size());
 
-            // term_freq
-            uint32_t tf = static_cast<uint32_t>(decode_varint(data, pos));
+            const uint8_t *data = postings_file_.data() + block.offset;
+            size_t pos = 0;
 
-            // positions_count
-            uint32_t positions_count = static_cast<uint32_t>(decode_varint(data, pos));
+            uint32_t doc_count = static_cast<uint32_t>(decode_varint(data, pos));
+            spdlog::debug("  doc_count={}", doc_count);
 
-            // positions (дельта)
-            std::vector<uint32_t> positions;
-            uint32_t prev_pos = 0;
-            for (uint32_t j = 0; j < positions_count; ++j)
+            for (uint32_t i = 0; i < doc_count; ++i)
             {
-                uint32_t pos_val = static_cast<uint32_t>(decode_varint(data, pos)) + prev_pos;
-                positions.push_back(pos_val);
-                prev_pos = pos_val;
-            }
+                uint64_t doc_id = decode_varint(data, pos) + prev_doc_id;
+                prev_doc_id = doc_id;
 
-            result.push_back({doc_id, {tf, std::move(positions)}});
+                uint32_t tf = static_cast<uint32_t>(decode_varint(data, pos));
+                uint32_t positions_count = static_cast<uint32_t>(decode_varint(data, pos));
+
+                std::vector<uint32_t> positions;
+                uint32_t prev_pos = 0;
+                for (uint32_t j = 0; j < positions_count; ++j)
+                {
+                    uint32_t pos_val = static_cast<uint32_t>(decode_varint(data, pos)) + prev_pos;
+                    positions.push_back(pos_val);
+                    prev_pos = pos_val;
+                }
+
+                result.push_back({doc_id, {tf, std::move(positions)}});
+            }
         }
 
         return result;
@@ -189,7 +206,7 @@ namespace lse
                 continue;
 
             double idf = calculateIDF(lex_result.df);
-            auto postings = decodePostings(lex_result.postings_offset, lex_result.postings_size);
+            auto postings = decodePostings(lex_result.blocks);
 
             for (const auto &[doc_id, info] : postings)
             {
@@ -214,12 +231,10 @@ namespace lse
             scored_docs.resize(top_k);
         }
 
-        // Получаем метаданные (каждый вызов getChunkMetadata валидирует предыдущие указатели)
-        // Сначала соберём все doc_id, потом одним SQL-запросом получим метаданные
+        // Получаем метаданные
         std::vector<SearchHit> results;
-        results.reserve(scored_docs.size()); // ← избегаем реаллокации
+        results.reserve(scored_docs.size());
 
-        // Подготавливаем запрос для пакетного получения метаданных
         const char *sql_batch = R"(
         SELECT c.doc_id, c.book_id, c.chunk_num, b.title, b.author, b.genre, c.content
         FROM chunks c
@@ -243,7 +258,6 @@ namespace lse
                 hit.book_id = sqlite3_column_int64(stmt, 1);
                 hit.chunk_num = static_cast<uint32_t>(sqlite3_column_int(stmt, 2));
 
-                // Копируем строки сразу (пока валидны указатели)
                 const char *title = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
                 const char *author = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4));
                 const char *genre = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5));
@@ -323,8 +337,6 @@ namespace lse
 
     auto IndexReader::prepareStatements() -> std::expected<void, IndexError>
     {
-        // Prepared statements больше не используются — запросы динамические
-        // Оставляем метод для совместимости, но он пустой
         return {};
     }
 
