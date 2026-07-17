@@ -16,7 +16,6 @@ namespace lse
     constexpr uint32_t INDEX_VERSION = 2;
     constexpr size_t META_SIZE = 128;
     constexpr size_t LEXICON_HEADER_SIZE = 16;
-    constexpr size_t TERM_ENTRY_SIZE = 56;
     constexpr size_t POSTINGS_HEADER_SIZE = 12;
 
     IndexWriter::~IndexWriter()
@@ -171,7 +170,8 @@ namespace lse
 
         if (db_)
         {
-            sqlite3_exec(db_, "PRAGMA wal_checkpoint(TRUNCATE)", nullptr, nullptr, nullptr);
+            int pragma_rc = sqlite3_exec(db_, "PRAGMA wal_checkpoint(TRUNCATE)", nullptr, nullptr, nullptr);
+            (void)pragma_rc;
             sqlite3_close(db_);
             db_ = nullptr;
         }
@@ -461,8 +461,11 @@ namespace lse
             return std::unexpected(IndexError::FileError);
 
         // WAL mode для лучшей производительности
-        sqlite3_exec(db_, "PRAGMA journal_mode=WAL", nullptr, nullptr, nullptr);
-        sqlite3_exec(db_, "PRAGMA synchronous=NORMAL", nullptr, nullptr, nullptr);
+        int pragma_rc;
+        pragma_rc = sqlite3_exec(db_, "PRAGMA journal_mode=WAL", nullptr, nullptr, nullptr);
+        (void)pragma_rc;
+        pragma_rc = sqlite3_exec(db_, "PRAGMA synchronous=NORMAL", nullptr, nullptr, nullptr);
+        (void)pragma_rc;
 
         const char *create_sql = R"(
         CREATE TABLE IF NOT EXISTS books (

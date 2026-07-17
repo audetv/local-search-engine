@@ -11,7 +11,6 @@ namespace lse
 
     constexpr uint32_t META_MAGIC = 0x4C534531;
     constexpr uint32_t LEXICON_MAGIC = 0x4C455831;
-    constexpr uint32_t POSTINGS_MAGIC = 0x504F5331;
     constexpr size_t LEXICON_HEADER_SIZE = 16;
     constexpr size_t TERM_ENTRY_SIZE = 56;
 
