@@ -125,19 +125,14 @@ namespace lse
             }
             else
             {
-                // Нашли! Читаем данные терма
                 uint64_t blocks_offset = read_le<uint64_t>(data, entry_offset + 24);
-
-                spdlog::debug("findTerm: term='{}', entry_offset={}, blocks_offset={}",
-                              term, entry_offset, blocks_offset);
-
                 uint32_t df = read_le<uint32_t>(data, entry_offset + 12);
 
                 std::vector<PostingBlockInfo> blocks;
                 const uint8_t *blocks_ptr = data + blocks_offset;
 
-                uint32_t loaded_block_count = read_le<uint32_t>(blocks_ptr, 0); // читаем block_count
-                blocks_ptr += 4;                                                // пропускаем block_count
+                uint32_t loaded_block_count = read_le<uint32_t>(blocks_ptr, 0);
+                blocks_ptr += 4;
 
                 for (uint32_t j = 0; j < loaded_block_count; ++j)
                 {
@@ -164,14 +159,10 @@ namespace lse
 
         for (const auto &block : blocks)
         {
-            spdlog::debug("decodePostings: postings_file_.data()={}, block.offset={}, block.size={}, postings_file_.size()={}",
-                          (void *)postings_file_.data(), block.offset, block.size, postings_file_.size());
-
             const uint8_t *data = postings_file_.data() + block.offset;
             size_t pos = 0;
 
             uint32_t doc_count = static_cast<uint32_t>(decode_varint(data, pos));
-            spdlog::debug("  doc_count={}", doc_count);
 
             for (uint32_t i = 0; i < doc_count; ++i)
             {
@@ -201,7 +192,7 @@ namespace lse
                              size_t top_k,
                              const std::string &genre_filter,
                              const std::string &author_filter)
-        -> std::expected<std::vector<SearchHit>, IndexError>
+        -> std::expected<std::deque<SearchHit>, IndexError>
     {
 
         if (!is_open_)
@@ -230,7 +221,7 @@ namespace lse
 
         if (doc_scores.empty())
         {
-            return std::vector<SearchHit>{};
+            return std::deque<SearchHit>{};
         }
 
         // Сортируем по score
@@ -244,9 +235,8 @@ namespace lse
             scored_docs.resize(top_k);
         }
 
-        // Получаем метаданные
-        std::vector<SearchHit> results;
-        results.reserve(scored_docs.size());
+        // Получаем метаданные через deque (не реаллоцирует память)
+        std::deque<SearchHit> results;
 
         const char *sql_batch = R"(
         SELECT c.doc_id, c.book_id, c.chunk_num, b.title, b.author, b.genre, c.content

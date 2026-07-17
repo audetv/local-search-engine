@@ -21,6 +21,7 @@ cd local-search-engine
 rm -rf build/debug
 cmake --preset=debug
 cmake --build --preset=debug
+ctest --preset=debug
 ```
 
 ## Проверка сборки

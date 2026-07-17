@@ -61,8 +61,12 @@
         {
             "name": "debug",
             "configurePreset": "debug",
+            "configuration": "Debug",
             "output": {
                 "outputOnFailure": true
+            },
+            "environment": {
+                "ASAN_OPTIONS": "detect_container_overflow=0:detect_odr_violation=0"
             }
         },
         {

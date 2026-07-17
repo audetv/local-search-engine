@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <deque>
 #include <unordered_map>
 #include <cstdint>
 #include <expected>
@@ -23,9 +24,34 @@ namespace lse
         std::string title;
         std::string author;
         std::string genre;
-        std::string content; // текст чанка для сниппета
+        std::string content;
         int64_t book_id;
         uint32_t chunk_num;
+
+        SearchHit() = default;
+        SearchHit(SearchHit &&other) noexcept
+            : doc_id(other.doc_id), bm25_score(other.bm25_score), title(std::move(other.title)), author(std::move(other.author)), genre(std::move(other.genre)), content(std::move(other.content)), book_id(other.book_id), chunk_num(other.chunk_num)
+        {
+        }
+
+        SearchHit &operator=(SearchHit &&other) noexcept
+        {
+            if (this != &other)
+            {
+                doc_id = other.doc_id;
+                bm25_score = other.bm25_score;
+                title = std::move(other.title);
+                author = std::move(other.author);
+                genre = std::move(other.genre);
+                content = std::move(other.content);
+                book_id = other.book_id;
+                chunk_num = other.chunk_num;
+            }
+            return *this;
+        }
+
+        SearchHit(const SearchHit &) = delete;
+        SearchHit &operator=(const SearchHit &) = delete;
     };
 
     struct PostingBlockInfo
@@ -43,12 +69,12 @@ namespace lse
         auto open(const std::filesystem::path &index_dir) -> std::expected<void, IndexError>;
         void close();
 
-        // Поиск
+        // Поиск. Возвращает результаты в deque (непрерывная память не требуется).
         auto search(const std::vector<std::string> &query_terms,
                     size_t top_k = 20,
                     const std::string &genre_filter = "",
                     const std::string &author_filter = "")
-            -> std::expected<std::vector<SearchHit>, IndexError>;
+            -> std::expected<std::deque<SearchHit>, IndexError>;
 
         // Статистика
         uint64_t docCount() const { return doc_count_; }
