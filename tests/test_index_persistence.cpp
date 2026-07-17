@@ -4,12 +4,12 @@
 #include "tokenizer/tokenizer.hpp"
 #include "tokenizer/stemmer.hpp"
 #include <filesystem>
+#include <memory>
 #include <spdlog/spdlog.h>
 
 using namespace lse;
 namespace fs = std::filesystem;
 
-// Вспомогательная функция: токенизирует и стеммит текст
 static auto tokenize_and_stem(const std::string &text, Stemmer &stemmer) -> std::vector<Token>
 {
     Tokenizer tokenizer(text);
@@ -27,14 +27,11 @@ static auto tokenize_and_stem(const std::string &text, Stemmer &stemmer) -> std:
 
 TEST_CASE("IndexWriter/IndexReader: write and read single document", "[persistence]")
 {
-    spdlog::set_level(spdlog::level::debug); // Включаем debug-логирование
-
     auto index_dir = fs::temp_directory_path() / "test_index_1";
     fs::remove_all(index_dir);
 
     Stemmer stemmer(StemmerLanguage::Russian);
 
-    // Пишем
     {
         IndexWriter writer;
         REQUIRE(writer.open(index_dir).has_value());
@@ -50,7 +47,6 @@ TEST_CASE("IndexWriter/IndexReader: write and read single document", "[persisten
         writer.close();
     }
 
-    // Читаем
     {
         IndexReader reader;
         REQUIRE(reader.open(index_dir).has_value());
@@ -67,9 +63,9 @@ TEST_CASE("IndexWriter/IndexReader: write and read single document", "[persisten
         auto results = reader.search(query_terms, 10);
         REQUIRE(results.has_value());
         REQUIRE(results->size() == 1);
-        CHECK(results->at(0).title == "Тестовая книга");
-        CHECK(results->at(0).author == "Автор");
-        CHECK(results->at(0).bm25_score > 0.0f);
+        CHECK(results->at(0)->title == "Тестовая книга");
+        CHECK(results->at(0)->author == "Автор");
+        CHECK(results->at(0)->bm25_score > 0.0f);
 
         reader.close();
     }
@@ -79,8 +75,6 @@ TEST_CASE("IndexWriter/IndexReader: write and read single document", "[persisten
 
 TEST_CASE("IndexWriter/IndexReader: multiple documents", "[persistence]")
 {
-    spdlog::set_level(spdlog::level::debug); // Включаем debug-логирование
-
     auto index_dir = fs::temp_directory_path() / "test_index_2";
     fs::remove_all(index_dir);
 
@@ -107,7 +101,6 @@ TEST_CASE("IndexWriter/IndexReader: multiple documents", "[persistence]")
         REQUIRE(reader.open(index_dir).has_value());
         CHECK(reader.docCount() == 2);
 
-        // Поиск "история" должен найти документ 2
         auto query_tokens = tokenize_and_stem("история", stemmer);
         std::vector<std::string> query_terms;
         for (const auto &t : query_tokens)
@@ -116,7 +109,7 @@ TEST_CASE("IndexWriter/IndexReader: multiple documents", "[persistence]")
         auto results = reader.search(query_terms, 10);
         REQUIRE(results.has_value());
         REQUIRE(results->size() == 1);
-        CHECK(results->at(0).title == "Книга 2");
+        CHECK(results->at(0)->title == "Книга 2");
 
         reader.close();
     }
@@ -126,14 +119,11 @@ TEST_CASE("IndexWriter/IndexReader: multiple documents", "[persistence]")
 
 TEST_CASE("IndexWriter/IndexReader: persistence survives reopen", "[persistence]")
 {
-    spdlog::set_level(spdlog::level::debug); // Включаем debug-логирование
-
     auto index_dir = fs::temp_directory_path() / "test_index_3";
     fs::remove_all(index_dir);
 
     Stemmer stemmer(StemmerLanguage::Russian);
 
-    // Первое открытие — пишем
     {
         IndexWriter writer;
         writer.open(index_dir);
@@ -142,7 +132,6 @@ TEST_CASE("IndexWriter/IndexReader: persistence survives reopen", "[persistence]
         writer.addDocument(100, 1, tokens, "тестовый документ");
     }
 
-    // Второе открытие — добавляем ещё
     {
         IndexWriter writer;
         writer.open(index_dir);
@@ -150,7 +139,6 @@ TEST_CASE("IndexWriter/IndexReader: persistence survives reopen", "[persistence]
         writer.addDocument(100, 2, tokens, "второй документ");
     }
 
-    // Читаем — должны быть оба документа
     {
         IndexReader reader;
         reader.open(index_dir);
@@ -171,8 +159,6 @@ TEST_CASE("IndexWriter/IndexReader: persistence survives reopen", "[persistence]
 
 TEST_CASE("IndexWriter/IndexReader: empty index", "[persistence]")
 {
-    spdlog::set_level(spdlog::level::debug); // Включаем debug-логирование
-
     auto index_dir = fs::temp_directory_path() / "test_index_empty";
     fs::remove_all(index_dir);
 
@@ -198,8 +184,6 @@ TEST_CASE("IndexWriter/IndexReader: empty index", "[persistence]")
 
 TEST_CASE("IndexWriter/IndexReader: filter by genre", "[persistence]")
 {
-    spdlog::set_level(spdlog::level::debug); // Включаем debug-логирование
-
     auto index_dir = fs::temp_directory_path() / "test_index_filter";
     fs::remove_all(index_dir);
 
@@ -228,17 +212,14 @@ TEST_CASE("IndexWriter/IndexReader: filter by genre", "[persistence]")
         for (const auto &t : query_tokens)
             query_terms.push_back(t.text);
 
-        // Без фильтра — 1 результат
         auto results = reader.search(query_terms, 10);
         REQUIRE(results.has_value());
         CHECK(results->size() == 1);
 
-        // С фильтром по истории — 1 результат
         auto results_hist = reader.search(query_terms, 10, "История");
         REQUIRE(results_hist.has_value());
         CHECK(results_hist->size() == 1);
 
-        // С фильтром по науке — 0 результатов (древний рим в книге истории)
         auto results_sci = reader.search(query_terms, 10, "Наука");
         REQUIRE(results_sci.has_value());
         CHECK(results_sci->empty());
