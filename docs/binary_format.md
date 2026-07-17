@@ -1,6 +1,6 @@
 # Бинарный формат индекса Local Search Engine
 
-Версия: 1.0  
+Версия: 1.1  
 Дата: 2026-07-17
 
 ## Обзор
@@ -122,8 +122,7 @@
 
 ```sql
 CREATE TABLE books (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    uuid TEXT UNIQUE NOT NULL,
+    id INTEGER PRIMARY KEY,              -- детерминированный хеш (int64)
     title TEXT NOT NULL,
     author TEXT DEFAULT '',
     genre TEXT DEFAULT '',
@@ -134,19 +133,72 @@ CREATE TABLE books (
 );
 
 CREATE TABLE chunks (
-    doc_id INTEGER PRIMARY KEY,
-    book_uuid TEXT NOT NULL,
+    doc_id INTEGER PRIMARY KEY,          -- совпадает с doc_id из индекса
+    book_id INTEGER NOT NULL,            -- ссылка на books.id
     chunk_num INTEGER NOT NULL,
     word_count INTEGER DEFAULT 0,
     char_count INTEGER DEFAULT 0,
     content TEXT,
-    FOREIGN KEY (book_uuid) REFERENCES books(uuid)
+    FOREIGN KEY (book_id) REFERENCES books(id)
 );
 
-CREATE INDEX idx_chunks_book ON chunks(book_uuid);
+CREATE INDEX idx_chunks_book ON chunks(book_id);
 CREATE INDEX idx_books_genre ON books(genre);
 CREATE INDEX idx_books_author ON books(author);
 ```
+
+### Детерминированный ID книги
+
+ID книги генерируется как первые 8 байт SHA256-хеша от строки `нормализованный_путь|название|автор`.
+
+**Зачем:** одна и та же книга (тот же файл, название, автор) всегда получает один и тот же `book_id`. Это решает проблему дедупликации при переиндексации без необходимости хранить отдельный UUID.
+
+```cpp
+#include <openssl/sha.h>
+#include <algorithm>
+#include <string>
+
+// Генерирует детерминированный ID книги
+inline auto generateBookId(const std::string& file_path,
+                            const std::string& title,
+                            const std::string& author) -> int64_t {
+    // Нормализуем путь: нижний регистр, убираем расширения
+    std::string normalized_path = file_path;
+    std::transform(normalized_path.begin(), normalized_path.end(),
+                   normalized_path.begin(), ::tolower);
+    
+    auto strip_ext = [](std::string& s, const std::string& ext) {
+        if (s.size() > ext.size() && 
+            std::equal(ext.rbegin(), ext.rend(), s.rbegin(),
+                       [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
+            s.resize(s.size() - ext.size());
+        }
+    };
+    strip_ext(normalized_path, ".gz");
+    strip_ext(normalized_path, ".txt");
+    
+    // Формируем строку для хеширования
+    std::string data = normalized_path + "|" + title + "|" + author;
+    
+    // SHA256
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256(reinterpret_cast<const unsigned char*>(data.c_str()),
+           data.size(), hash);
+    
+    // Первые 8 байт как int64_t (big-endian)
+    int64_t result = 0;
+    for (int i = 0; i < 8; ++i) {
+        result = (result << 8) | hash[i];
+    }
+    
+    return result;
+}
+```
+
+**Почему int64, а не TEXT:**
+- 8 байт против 16+ символов — компактный индекс
+- Быстрые JOIN'ы по INTEGER
+- Вероятность коллизии на 100 000 книг: ~3×10⁻¹⁴ (пренебрежимо мала)
 
 ---
 
@@ -169,14 +221,16 @@ CREATE INDEX idx_books_author ON books(author);
 
 ### 6.1 Добавление документа (IndexWriter)
 
-1. Токенизировать + стеммить текст чанка
-2. INSERT в `documents.db` → получить `doc_id`
-3. Для каждого уникального терма:
+1. Вычислить `book_id = generateBookId(file_path, title, author)`
+2. `INSERT OR IGNORE INTO books (id, title, author, ...) VALUES (book_id, ...)` — если книга уже есть, пропускаем
+3. Токенизировать + стеммить текст чанка
+4. `INSERT INTO chunks (book_id, chunk_num, ...) VALUES (book_id, ...)` → получить `doc_id`
+5. Для каждого уникального терма:
    - Найти терм в lexicon (бинарный поиск по `term_hash`)
    - Если не найден — добавить новую TermEntry, записать текст терма в секцию C
    - Дописать Posting в конец `postings.idx`
    - Обновить `df` и `postings_size` в TermEntry
-4. Обновить `index.meta` (`doc_count`, `total_term_count`, `avg_doc_length`)
+6. Обновить `index.meta` (`doc_count`, `total_term_count`, `avg_doc_length`)
 
 ### 6.2 Поиск (IndexReader)
 
@@ -188,7 +242,14 @@ CREATE INDEX idx_books_author ON books(author);
 3. Пересечь списки doc_id (AND) или объединить (OR)
 4. Для каждого документа вычислить BM25 score
 5. Отсортировать по score, вернуть top-K
-6. По `doc_id` получить метаданные из SQLite
+6. По `doc_id` получить метаданные из SQLite: `SELECT * FROM chunks JOIN books ON chunks.book_id = books.id WHERE chunks.doc_id = ?`
+7. Применить фильтры (жанр, автор) — через JOIN по `books.id = chunks.book_id`
+
+### 6.3 Дедупликация книг при переиндексации
+
+1. Вычислить `book_id` детерминированно
+2. `INSERT OR IGNORE INTO books` — если книга уже существует, вставка игнорируется
+3. Сравнить `file_path` и `created_at`: если файл новее — обновить метаданные книги и переиндексировать все чанки
 
 ---
 
