@@ -10,6 +10,7 @@ add_executable(lse_tests
     test_docx_parser.cpp
     test_chunker.cpp
     test_memory_mapped_file.cpp
+    test_index_persistence.cpp
 )
 
 target_link_libraries(lse_tests PRIVATE

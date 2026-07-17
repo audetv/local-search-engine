@@ -1,6 +1,7 @@
 #pragma once
 
 #include "memory_mapped_file.hpp"
+#include "index_common.hpp"
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,15 +16,6 @@ namespace lse
 {
 
     struct Token;
-
-    enum class IndexError
-    {
-        AlreadyOpen,
-        NotOpen,
-        FileError,
-        EmptyDocument,
-        WriteError
-    };
 
     class IndexWriter
     {

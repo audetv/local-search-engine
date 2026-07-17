@@ -42,7 +42,7 @@ namespace lse
         }
 
         // Читаем или инициализируем meta
-        if (meta_exists)
+        if (meta_exists && meta_file_.size() >= 40)
         {
             auto magic = read_le<uint32_t>(meta_file_.data(), 0);
             if (magic != META_MAGIC)
@@ -57,6 +57,10 @@ namespace lse
         {
             write_le<uint32_t>(meta_file_.data(), 0, META_MAGIC);
             write_le<uint32_t>(meta_file_.data(), 4, INDEX_VERSION);
+            doc_count_ = 0;
+            total_term_count_ = 0;
+            avg_doc_length_ = 0.0;
+            last_doc_id_ = 0;
         }
 
         // Открываем postings (всегда ReadWrite)
@@ -72,7 +76,7 @@ namespace lse
         }
 
         // Инициализируем заголовок postings
-        if (!postings_exists || postings_file_.size() == 0)
+        if (!postings_exists || postings_file_.size() < POSTINGS_HEADER_SIZE)
         {
             postings_file_.grow(POSTINGS_HEADER_SIZE);
             write_le<uint32_t>(postings_file_.data(), 0, POSTINGS_MAGIC);
@@ -84,6 +88,20 @@ namespace lse
         auto db_result = initDatabase();
         if (!db_result.has_value())
             return std::unexpected(db_result.error());
+
+        // Восстанавливаем last_doc_id_ из SQLite, если meta была пустая
+        if (last_doc_id_ == 0)
+        {
+            sqlite3_stmt *stmt;
+            if (sqlite3_prepare_v2(db_, "SELECT COALESCE(MAX(doc_id), -1) + 1 FROM chunks", -1, &stmt, nullptr) == SQLITE_OK)
+            {
+                if (sqlite3_step(stmt) == SQLITE_ROW)
+                {
+                    last_doc_id_ = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
+                }
+                sqlite3_finalize(stmt);
+            }
+        }
 
         // Загружаем lexicon в память
         auto lexicon_path = index_dir / "lexicon.idx";
@@ -120,7 +138,7 @@ namespace lse
         }
 
         is_open_ = true;
-        spdlog::info("IndexWriter opened: {} ({} docs)", index_dir.string(), doc_count_);
+        spdlog::info("IndexWriter opened: {} ({} docs, last_id={})", index_dir.string(), doc_count_, last_doc_id_);
         return {};
     }
 
@@ -132,12 +150,14 @@ namespace lse
         flushLexicon();
         flushMeta();
 
+        // Закрываем файлы (flushLexicon уже закрыл lexicon_file_)
         meta_file_.close();
-        lexicon_file_.close();
         postings_file_.close();
 
         if (db_)
         {
+            // Форсируем сброс WAL в основную БД перед закрытием
+            sqlite3_exec(db_, "PRAGMA wal_checkpoint(TRUNCATE)", nullptr, nullptr, nullptr);
             sqlite3_close(db_);
             db_ = nullptr;
         }
@@ -226,15 +246,14 @@ namespace lse
         auto term_stats = countTerms(tokens);
 
         // 3. Для каждого терма: обновляем lexicon, дописываем posting
-        size_t current_postings_end = postings_file_.size();
-
         for (const auto &[term_text, stats] : term_stats)
         {
             const auto &[tf, positions] = stats;
 
             // Находим или создаём запись в lexicon
             auto &entry = lexicon_buffer_[term_text];
-            if (entry.term_text.empty())
+            bool is_new_term = entry.term_text.empty();
+            if (is_new_term)
             {
                 entry.term_text = term_text;
                 entry.term_hash = 0; // TODO: xxHash64(term_text)
@@ -245,13 +264,9 @@ namespace lse
 
             // Сериализуем posting
             std::vector<uint8_t> posting_data;
-            // doc_id (дельта от предыдущего? пока пишем как есть)
             writeVarint(posting_data, doc_id);
-            // term_freq
             writeVarint(posting_data, tf);
-            // positions_count
             writeVarint(posting_data, positions.size());
-            // positions (дельта-кодированные)
             uint32_t prev_pos = 0;
             for (uint32_t pos : positions)
             {
@@ -259,20 +274,19 @@ namespace lse
                 prev_pos = pos;
             }
 
-            // Дописываем в postings файл
-            size_t new_size = current_postings_end + posting_data.size();
-            if (new_size > postings_file_.size())
-            {
-                postings_file_.grow(new_size);
-            }
-            std::memcpy(postings_file_.data() + current_postings_end,
+            // Дописываем в конец postings файла (Баг 2 исправлен: каждый терм получает новое смещение)
+            size_t offset = postings_file_.size();
+            size_t new_size = offset + posting_data.size();
+            postings_file_.grow(new_size);
+            std::memcpy(postings_file_.data() + offset,
                         posting_data.data(), posting_data.size());
 
-            entry.postings_offset = current_postings_end;
-            entry.postings_size = posting_data.size();
+            if (entry.postings_size == 0)
+            {
+                entry.postings_offset = offset;
+            }
+            entry.postings_size += posting_data.size();
             entry.df++;
-
-            current_postings_end += posting_data.size();
         }
 
         // 4. Обновляем метаданные
@@ -304,14 +318,14 @@ namespace lse
         size_t data_size = 0;
         for (auto *entry : sorted)
         {
-            data_size += entry->term_text.size() + 1; // +1 за нулевой терминатор
+            data_size += entry->term_text.size() + 1;
         }
 
         size_t header_size = LEXICON_HEADER_SIZE;
         size_t table_size = sorted.size() * TERM_ENTRY_SIZE;
         size_t total_size = header_size + table_size + data_size;
 
-        // Открываем файл для записи
+        // Закрываем старый lexicon и создаём новый
         lexicon_file_.close();
         if (!lexicon_file_.open(lexicon_path, MemoryMappedFile::Mode::CreateNew, total_size))
         {

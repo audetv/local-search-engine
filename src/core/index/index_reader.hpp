@@ -1,0 +1,95 @@
+#pragma once
+
+#include "memory_mapped_file.hpp"
+#include "index_common.hpp"
+#include <string>
+#include <string_view>
+#include <vector>
+#include <unordered_map>
+#include <cstdint>
+#include <expected>
+#include <filesystem>
+
+struct sqlite3;
+struct sqlite3_stmt;
+
+namespace lse
+{
+
+    struct SearchHit
+    {
+        uint64_t doc_id;
+        float bm25_score;
+        std::string title;
+        std::string author;
+        std::string genre;
+        std::string content; // текст чанка для сниппета
+        int64_t book_id;
+        uint32_t chunk_num;
+    };
+
+    class IndexReader
+    {
+    public:
+        IndexReader() = default;
+        ~IndexReader();
+
+        auto open(const std::filesystem::path &index_dir) -> std::expected<void, IndexError>;
+        void close();
+
+        // Поиск
+        auto search(const std::vector<std::string> &query_terms,
+                    size_t top_k = 20,
+                    const std::string &genre_filter = "",
+                    const std::string &author_filter = "")
+            -> std::expected<std::vector<SearchHit>, IndexError>;
+
+        // Статистика
+        uint64_t docCount() const { return doc_count_; }
+        double avgDocLength() const { return avg_doc_length_; }
+
+        // Получить метаданные чанка по doc_id
+        auto getChunkMetadata(uint64_t doc_id) -> std::expected<SearchHit, IndexError>;
+
+    private:
+        std::filesystem::path index_dir_;
+
+        MemoryMappedFile meta_file_;
+        MemoryMappedFile lexicon_file_;
+        MemoryMappedFile postings_file_;
+        sqlite3 *db_ = nullptr;
+
+        uint64_t doc_count_ = 0;
+        double avg_doc_length_ = 0.0;
+        uint32_t term_count_ = 0;
+        uint64_t lexicon_data_offset_ = 0;
+        uint64_t postings_data_offset_ = 12; // после заголовка
+
+        bool is_open_ = false;
+
+        // BM25 константы
+        static constexpr double k1 = 1.2;
+        static constexpr double b_param = 0.75;
+
+        // Бинарный поиск терма в lexicon
+        struct LexiconResult
+        {
+            bool found;
+            uint64_t postings_offset;
+            uint64_t postings_size;
+            uint32_t df;
+        };
+        auto findTerm(std::string_view term) const -> LexiconResult;
+
+        // Декодировать постинг-лист
+        auto decodePostings(uint64_t offset, uint64_t size) const
+            -> std::vector<std::pair<uint64_t, std::pair<uint32_t, std::vector<uint32_t>>>>;
+
+        // BM25 score
+        double calculateBM25(uint32_t tf, uint32_t doc_length, double idf) const;
+        double calculateIDF(uint32_t df) const;
+
+        auto prepareStatements() -> std::expected<void, IndexError>;
+    };
+
+} // namespace lse
