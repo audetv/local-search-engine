@@ -160,11 +160,12 @@ namespace lse
         if (!is_open_)
             return;
 
-        flushLexicon();
-        flushMeta();
+        auto lex_result = flushLexicon();
+        (void)lex_result;
+        auto meta_result = flushMeta();
+        (void)meta_result;
 
         postings_file_.flush();
-        // Закрываем файлы (flushLexicon уже закрыл lexicon_file_)
         meta_file_.close();
         postings_file_.close();
 
