@@ -9,6 +9,8 @@ add_executable(lse_tests
     test_fb2_parser.cpp
     test_docx_parser.cpp
     test_chunker.cpp
+    test_memory_mapped_file.cpp
+    test_index_persistence.cpp
 )
 
 target_link_libraries(lse_tests PRIVATE
@@ -17,6 +19,11 @@ target_link_libraries(lse_tests PRIVATE
 )
 
 target_compile_features(lse_tests PRIVATE cxx_std_23)
+
+# MSVC: отключаем C4834 (nodiscard) для тестовых проверок
+if(MSVC)
+    target_compile_options(lse_tests PRIVATE /wd4834)
+endif()
 
 # Sanitizers for debug (GCC/Clang only)
 if(ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")

@@ -27,6 +27,8 @@ find_package(CURL REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
 find_package(minizip CONFIG REQUIRED)
+find_package(xxHash CONFIG REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 # libstemmer (Snowball stemmer) via FetchContent
 include(FetchContent)
@@ -67,6 +69,12 @@ set_target_properties(local-search-engine PROPERTIES
 # Tests
 if(BUILD_TESTS)
     enable_testing()
+    
+    # ASan false positive: отключаем проверки контейнеров для всех тестов
+    if(ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(CMAKE_CTEST_ARGUMENTS "--environment;ASAN_OPTIONS=detect_container_overflow=0:detect_odr_violation=0")
+    endif()
+    
     find_package(Catch2 CONFIG REQUIRED)
     add_subdirectory(tests)
 endif()

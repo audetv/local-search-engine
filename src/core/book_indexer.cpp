@@ -5,12 +5,50 @@
 #include "chunker/chunker.hpp"
 #include "tokenizer/tokenizer.hpp"
 #include <spdlog/spdlog.h>
+#include <algorithm>
+#include <openssl/sha.h>
 
 namespace lse
 {
 
-    BookIndexer::BookIndexer(InMemoryIndex &index, Stemmer &stemmer)
-        : index_(index), stemmer_(stemmer)
+    // Детерминированный ID книги
+    static auto generateBookId(const std::string &file_path,
+                               const std::string &title,
+                               const std::string &author) -> int64_t
+    {
+        std::string normalized_path = file_path;
+        std::transform(normalized_path.begin(), normalized_path.end(),
+                       normalized_path.begin(), ::tolower);
+
+        auto strip_ext = [](std::string &s, const std::string &ext)
+        {
+            if (s.size() > ext.size() &&
+                std::equal(ext.rbegin(), ext.rend(), s.rbegin(),
+                           [](char a, char b)
+                           { return std::tolower(a) == std::tolower(b); }))
+            {
+                s.resize(s.size() - ext.size());
+            }
+        };
+        strip_ext(normalized_path, ".gz");
+        strip_ext(normalized_path, ".txt");
+
+        std::string data = normalized_path + "|" + title + "|" + author;
+
+        unsigned char hash[SHA256_DIGEST_LENGTH];
+        SHA256(reinterpret_cast<const unsigned char *>(data.c_str()), data.size(), hash);
+
+        int64_t result = 0;
+        for (int i = 0; i < 8; ++i)
+        {
+            result = (result << 8) | hash[i];
+        }
+
+        return result;
+    }
+
+    BookIndexer::BookIndexer(IndexWriter &writer, Stemmer &stemmer)
+        : writer_(writer), stemmer_(stemmer)
     {
         tokenizer_opts_.normalize_yo = true;
         tokenizer_opts_.keep_digits = true;
@@ -69,13 +107,24 @@ namespace lse
 
         if (!parse_result.has_value())
         {
-            spdlog::error("Failed to parse {}: {}", file_path.string(),
+            spdlog::error("Failed to parse {}: error_code={}", file_path.string(),
                           static_cast<int>(parse_result.error()));
-            return std::unexpected(IndexError::DocumentNotFound);
+            return std::unexpected(IndexError::FileError);
         }
 
         auto &doc = *parse_result;
         spdlog::info("Indexing: {}", doc.title);
+
+        // Вычисляем book_id
+        int64_t book_id = generateBookId(file_path.string(), doc.title, "");
+
+        // Upsert книги
+        auto upsert_result = writer_.upsertBook(book_id, doc.title, "", "", "ru", file_path.string());
+        if (!upsert_result.has_value())
+        {
+            spdlog::error("Failed to upsert book: {}", doc.title);
+            return std::unexpected(IndexError::WriteError);
+        }
 
         // Чанкаем
         Chunker chunker(chunker_config_);
@@ -88,9 +137,9 @@ namespace lse
         }
 
         std::vector<BookInfo> books;
+        uint32_t chunk_num = 1;
         for (const auto &chunk : chunks)
         {
-            // Токенизируем и стеммим
             auto tokens = tokenizeAndStem(chunk);
 
             if (tokens.empty())
@@ -98,10 +147,16 @@ namespace lse
                 continue;
             }
 
-            // Добавляем в индекс
-            uint64_t doc_id = index_.addDocument(tokens);
-            books.push_back(BookInfo{doc_id, doc.title, doc.file_path});
+            auto doc_id = writer_.addDocument(book_id, chunk_num, tokens, chunk);
+            if (!doc_id.has_value())
+            {
+                spdlog::error("Failed to add document for chunk {} of {}", chunk_num, doc.title);
+                continue;
+            }
+
+            books.push_back(BookInfo{*doc_id, doc.title, doc.file_path});
             indexed_chunks_++;
+            chunk_num++;
         }
 
         indexed_files_++;
@@ -115,7 +170,7 @@ namespace lse
         if (!std::filesystem::exists(dir_path))
         {
             spdlog::error("Directory not found: {}", dir_path.string());
-            return std::unexpected(IndexError::DocumentNotFound);
+            return std::unexpected(IndexError::FileError);
         }
 
         size_t count = 0;

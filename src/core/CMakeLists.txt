@@ -12,6 +12,9 @@ add_library(lse_core STATIC
     tokenizer/tokenizer.cpp
     tokenizer/stemmer.cpp
     index/in_memory_index.cpp
+    index/memory_mapped_file.cpp
+    index/index_writer.cpp
+    index/index_reader.cpp
     parser/txt_parser.cpp
     parser/fb2_parser.cpp
     parser/docx_parser.cpp
@@ -40,6 +43,9 @@ target_link_libraries(lse_core PUBLIC
     tomlplusplus::tomlplusplus
     uchardet::libuchardet
     $<IF:$<TARGET_EXISTS:MINIZIP::minizip>,MINIZIP::minizip,MINIZIP::minizipstatic>
+    xxHash::xxhash
+    OpenSSL::SSL
+    OpenSSL::Crypto
 )
 
 target_compile_features(lse_core PUBLIC cxx_std_23)
