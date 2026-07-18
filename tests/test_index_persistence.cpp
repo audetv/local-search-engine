@@ -227,3 +227,60 @@ TEST_CASE("IndexWriter/IndexReader: filter by genre", "[persistence]")
 
     fs::remove_all(index_dir);
 }
+
+TEST_CASE("IndexReader: search with highlight terms", "[persistence]")
+{
+    auto index_dir = fs::temp_directory_path() / "test_index_highlight";
+    fs::remove_all(index_dir);
+
+    Stemmer stemmer(StemmerLanguage::Russian);
+
+    {
+        IndexWriter writer;
+        writer.open(index_dir);
+        writer.upsertBook(1, "Книга про древний Рим", "Автор", "История", "ru", "/tmp/book.fb2");
+        auto tokens = tokenize_and_stem("история древнего рима", stemmer);
+        writer.addDocument(1, 1, tokens, "история древнего рима");
+        writer.close();
+    }
+
+    {
+        IndexReader reader;
+        reader.open(index_dir);
+
+        // Поисковые термы (стеммированные)
+        auto query_tokens = tokenize_and_stem("рима", stemmer);
+        std::vector<std::string> query_terms;
+        for (const auto &t : query_tokens)
+            query_terms.push_back(t.text);
+
+        // Оригинальные термы для подсветки
+        std::vector<std::string> highlight_terms = {"рима"};
+
+        auto results = reader.search(query_terms, 10, "", "", "", highlight_terms);
+        REQUIRE(results.has_value());
+        REQUIRE(results->size() == 1);
+
+        auto &hit = results->at(0);
+        CHECK(hit->highlights.size() > 0);
+
+        // Проверяем, что подсветка указывает на слово "рима" в content
+        bool found = false;
+        for (const auto &hl : hit->highlights)
+        {
+            std::string highlighted = hit->content.substr(hl.offset, hl.length);
+            // Приводим к нижнему регистру для сравнения
+            std::transform(highlighted.begin(), highlighted.end(), highlighted.begin(), ::tolower);
+            if (highlighted == "рима")
+            {
+                found = true;
+                break;
+            }
+        }
+        CHECK(found);
+
+        reader.close();
+    }
+
+    fs::remove_all(index_dir);
+}

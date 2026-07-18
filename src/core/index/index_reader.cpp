@@ -182,7 +182,8 @@ namespace lse
                              size_t top_k,
                              const std::string &genre_filter,
                              const std::string &author_filter,
-                             const std::string &title_filter)
+                             const std::string &title_filter,
+                             const std::vector<std::string> &highlight_terms)
         -> std::expected<std::vector<std::unique_ptr<SearchHit>>, IndexError>
     {
 
@@ -263,6 +264,47 @@ namespace lse
                     hit->genre = genre;
                 if (content)
                     hit->content = content;
+
+                // Подсветка: ищем вхождения оригинальных термов в тексте чанка
+                if (!highlight_terms.empty() && !hit->content.empty())
+                {
+                    std::string content_lower = hit->content;
+                    std::transform(content_lower.begin(), content_lower.end(),
+                                   content_lower.begin(), ::tolower);
+
+                    for (const auto &hterm : highlight_terms)
+                    {
+                        std::string term_lower = hterm;
+                        std::transform(term_lower.begin(), term_lower.end(),
+                                       term_lower.begin(), ::tolower);
+
+                        if (term_lower.empty())
+                            continue;
+
+                        size_t pos = 0;
+                        while ((pos = content_lower.find(term_lower, pos)) != std::string::npos)
+                        {
+                            // Проверяем, что совпадение на границе слова
+                            bool valid = true;
+                            if (pos > 0 && std::isalnum(static_cast<unsigned char>(content_lower[pos - 1])))
+                            {
+                                valid = false; // не начало слова
+                            }
+                            size_t end_pos = pos + term_lower.size();
+                            if (end_pos < content_lower.size() &&
+                                std::isalnum(static_cast<unsigned char>(content_lower[end_pos])))
+                            {
+                                valid = false; // не конец слова
+                            }
+
+                            if (valid)
+                            {
+                                hit->highlights.push_back({pos, term_lower.size()});
+                            }
+                            pos += term_lower.size();
+                        }
+                    }
+                }
 
                 if (!title_filter.empty() && hit->title.find(title_filter) == std::string::npos)
                     continue;

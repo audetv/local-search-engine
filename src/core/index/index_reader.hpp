@@ -18,6 +18,12 @@ struct sqlite3_stmt;
 namespace lse
 {
 
+    struct Highlight
+    {
+        size_t offset; // позиция в content (в байтах UTF-8)
+        size_t length; // длина подсвечиваемого фрагмента (в байтах UTF-8)
+    };
+
     struct SearchHit
     {
         uint64_t doc_id;
@@ -26,13 +32,14 @@ namespace lse
         std::string author;
         std::string genre;
         std::string content;
+        std::vector<Highlight> highlights;
         int64_t book_id;
         uint32_t chunk_num;
 
         SearchHit() = default;
 
         SearchHit(SearchHit &&other) noexcept
-            : doc_id(other.doc_id), bm25_score(other.bm25_score), title(std::move(other.title)), author(std::move(other.author)), genre(std::move(other.genre)), content(std::move(other.content)), book_id(other.book_id), chunk_num(other.chunk_num)
+            : doc_id(other.doc_id), bm25_score(other.bm25_score), title(std::move(other.title)), author(std::move(other.author)), genre(std::move(other.genre)), content(std::move(other.content)), highlights(std::move(other.highlights)), book_id(other.book_id), chunk_num(other.chunk_num)
         {
         }
 
@@ -46,6 +53,7 @@ namespace lse
                 author = std::move(other.author);
                 genre = std::move(other.genre);
                 content = std::move(other.content);
+                highlights = std::move(other.highlights);
                 book_id = other.book_id;
                 chunk_num = other.chunk_num;
             }
@@ -76,7 +84,8 @@ namespace lse
                     size_t top_k = 20,
                     const std::string &genre_filter = "",
                     const std::string &author_filter = "",
-                    const std::string &title_filter = "")
+                    const std::string &title_filter = "",
+                    const std::vector<std::string> &highlight_terms = {})
             -> std::expected<std::vector<std::unique_ptr<SearchHit>>, IndexError>;
 
         // Статистика
