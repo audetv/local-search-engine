@@ -181,7 +181,8 @@ namespace lse
     auto IndexReader::search(const std::vector<std::string> &query_terms,
                              size_t top_k,
                              const std::string &genre_filter,
-                             const std::string &author_filter)
+                             const std::string &author_filter,
+                             const std::string &title_filter)
         -> std::expected<std::vector<std::unique_ptr<SearchHit>>, IndexError>
     {
 
@@ -263,6 +264,8 @@ namespace lse
                 if (content)
                     hit->content = content;
 
+                if (!title_filter.empty() && hit->title.find(title_filter) == std::string::npos)
+                    continue;
                 if (!genre_filter.empty() && hit->genre != genre_filter)
                     continue;
                 if (!author_filter.empty() && hit->author != author_filter)

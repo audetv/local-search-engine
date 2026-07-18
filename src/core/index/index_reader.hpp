@@ -75,7 +75,8 @@ namespace lse
         auto search(const std::vector<std::string> &query_terms,
                     size_t top_k = 20,
                     const std::string &genre_filter = "",
-                    const std::string &author_filter = "")
+                    const std::string &author_filter = "",
+                    const std::string &title_filter = "")
             -> std::expected<std::vector<std::unique_ptr<SearchHit>>, IndexError>;
 
         // Статистика
