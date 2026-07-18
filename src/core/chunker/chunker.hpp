@@ -19,21 +19,26 @@ namespace lse
     public:
         explicit Chunker(ChunkerConfig config = {});
 
-        // Разбивает текст на чанки по заданным правилам.
-        // Принимает текст с параграфами, разделёнными \n.
+        // Разбивает текст на чанки. Параграфы разделены \n.
         auto chunkify(std::string_view text) -> std::vector<std::string>;
 
     private:
         ChunkerConfig config_;
 
-        // Разбивает длинный параграф по предложениям
+        // Разбивает длинный параграф на предложения и группирует в чанки
         auto splitLongParagraph(std::string_view paragraph) -> std::vector<std::string>;
 
         // Разбивает текст на предложения
         static auto splitSentences(std::string_view text) -> std::vector<std::string>;
 
+        // Разбивает текст по словам (fallback, когда нет знаков препинания)
+        static auto splitByWords(std::string_view text, int max_size) -> std::vector<std::string>;
+
         // Нормализует троеточия
         static std::string normalizeTripleDots(std::string_view text);
+
+        // Подсчёт UTF-8 символов
+        static size_t utf8_length(std::string_view text);
     };
 
 } // namespace lse

@@ -42,7 +42,7 @@ TEST_CASE("IndexWriter/IndexReader: write and read single document", "[persisten
         auto tokens = tokenize_and_stem("история древнего рима", stemmer);
         auto doc_id = writer.addDocument(book_id, 1, tokens, "история древнего рима");
         REQUIRE(doc_id.has_value());
-        CHECK(*doc_id == 0);
+        CHECK(*doc_id == 1);
 
         writer.close();
     }

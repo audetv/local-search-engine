@@ -146,12 +146,11 @@ namespace lse
     {
         std::vector<std::pair<uint64_t, std::pair<uint32_t, std::vector<uint32_t>>>> result;
 
-        uint64_t prev_doc_id = 0;
-
         for (const auto &block : blocks)
         {
             const uint8_t *data = postings_file_.data() + block.offset;
             size_t pos = 0;
+            uint64_t prev_doc_id = 0; // ← сбрасываем для каждого блока
 
             uint32_t doc_count = static_cast<uint32_t>(decode_varint(data, pos));
 
