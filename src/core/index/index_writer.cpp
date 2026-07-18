@@ -60,7 +60,7 @@ namespace lse
             doc_count_ = 0;
             total_term_count_ = 0;
             avg_doc_length_ = 0.0;
-            last_doc_id_ = 0;
+            last_doc_id_ = 1;
         }
 
         // Открываем postings (всегда ReadWrite)
@@ -93,7 +93,7 @@ namespace lse
         if (last_doc_id_ == 0)
         {
             sqlite3_stmt *stmt;
-            if (sqlite3_prepare_v2(db_, "SELECT COALESCE(MAX(doc_id), -1) + 1 FROM chunks", -1, &stmt, nullptr) == SQLITE_OK)
+            if (sqlite3_prepare_v2(db_, "SELECT COALESCE(MAX(doc_id), 0) + 1 FROM chunks", -1, &stmt, nullptr) == SQLITE_OK)
             {
                 if (sqlite3_step(stmt) == SQLITE_ROW)
                 {
