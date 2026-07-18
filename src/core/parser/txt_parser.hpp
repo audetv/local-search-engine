@@ -12,6 +12,8 @@ namespace lse
     {
         std::string content;   // текст в UTF-8
         std::string title;     // название (из имени файла)
+        std::string author;    // автор
+        std::string genre;     // жанр
         std::string encoding;  // определённая кодировка
         std::string file_path; // путь к файлу
         size_t file_size = 0;

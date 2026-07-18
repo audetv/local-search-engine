@@ -68,6 +68,7 @@ namespace lse
 
         // Извлекаем автора
         std::string author;
+        // Извлекаем автора
         auto author_node = doc.select_node("/FictionBook/description/title-info/author");
         if (author_node.node())
         {
@@ -76,16 +77,22 @@ namespace lse
 
             if (first_name.node())
             {
-                author += first_name.node().text().as_string();
+                result.author += first_name.node().text().as_string();
             }
             if (last_name.node())
             {
-                if (!author.empty())
-                    author += " ";
-                author += last_name.node().text().as_string();
+                if (!result.author.empty())
+                    result.author += " ";
+                result.author += last_name.node().text().as_string();
             }
         }
-        // author пока не используется в ParsedDocument, но позже пригодится
+
+        // Извлекаем жанр
+        auto genre_node = doc.select_node("/FictionBook/description/title-info/genre");
+        if (genre_node.node())
+        {
+            result.genre = genre_node.node().text().as_string();
+        }
 
         // Извлекаем текст из всех <body> → <p>
         std::string content;
