@@ -151,8 +151,7 @@ TEST_CASE("IndexWriter/IndexReader: persistence survives reopen", "[persistence]
 
         auto results = reader.search(query_terms, 10);
         REQUIRE(results.has_value());
-        // TODO fix на этапе Этап 2.8.4: Отладка поиска (проблема 1)
-        // CHECK(results->size() == 2);
+        CHECK(results->size() == 2);
     }
 
     fs::remove_all(index_dir);

@@ -218,6 +218,19 @@ namespace lse
         return {};
     }
 
+    static size_t utf8_length(std::string_view text)
+    {
+        size_t len = 0;
+        for (size_t i = 0; i < text.size(); ++i)
+        {
+            if ((static_cast<unsigned char>(text[i]) & 0xC0) != 0x80)
+            {
+                len++;
+            }
+        }
+        return len;
+    }
+
     auto IndexWriter::addDocument(int64_t book_id, uint32_t chunk_num,
                                   const std::vector<Token> &tokens,
                                   const std::string &content)
@@ -246,7 +259,7 @@ namespace lse
         sqlite3_bind_int64(stmt, 2, book_id);
         sqlite3_bind_int(stmt, 3, chunk_num);
         sqlite3_bind_int(stmt, 4, static_cast<int>(tokens.size()));
-        sqlite3_bind_int(stmt, 5, static_cast<int>(content.size()));
+        sqlite3_bind_int(stmt, 5, static_cast<int>(utf8_length(content)));
         sqlite3_bind_text(stmt, 6, content.c_str(), -1, SQLITE_TRANSIENT);
 
         int rc = sqlite3_step(stmt);

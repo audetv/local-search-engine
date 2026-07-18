@@ -70,7 +70,7 @@ namespace lse
             if (combined <= config_.max_chunk_size)
             {
                 if (!current_chunk.empty())
-                    current_chunk += ' ';
+                    current_chunk += '\n'; // вместо ' '
                 current_chunk += paragraph;
 
                 // Достигли оптимального — сохраняем
@@ -101,7 +101,7 @@ namespace lse
                 std::string &last = chunks.back();
                 if (static_cast<int>(utf8_length(last) + utf8_length(current_chunk) + 1) <= config_.max_chunk_size)
                 {
-                    last += ' ';
+                    last += '\n'; // вместо ' '
                     last += current_chunk;
                 }
                 else
