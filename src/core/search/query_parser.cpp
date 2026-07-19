@@ -1,22 +1,22 @@
 #include "query_parser.hpp"
-#include <cctype>
 
 namespace lse
 {
 
-    auto QueryParser::parse(std::string_view query, [[maybe_unused]] bool is_query_string)
+    auto QueryParser::parse(std::string_view query, bool is_query_string)
         -> std::expected<QueryNode, ParseError>
     {
 
         query_ = query;
         pos_ = 0;
+        is_query_string_ = is_query_string;
 
         if (query.empty())
         {
             return std::unexpected(ParseError::EmptyQuery);
         }
 
-        auto result = parseExpression();
+        auto result = parseOrExpression();
         if (!result.has_value())
             return result;
 
@@ -29,10 +29,53 @@ namespace lse
         return result;
     }
 
-    auto QueryParser::parseExpression() -> std::expected<QueryNode, ParseError>
+    // or_expr = and_expr ('|' and_expr)*
+    auto QueryParser::parseOrExpression() -> std::expected<QueryNode, ParseError>
     {
-        QueryNode node;
-        node.op = QueryOp::And;
+        auto left = parseAndExpression();
+        if (!left.has_value())
+            return left;
+
+        std::vector<QueryNode> children;
+        children.push_back(std::move(*left));
+
+        while (!eof())
+        {
+            skipWhitespace();
+            if (eof())
+                break;
+
+            if (peek() == '|')
+            {
+                advance();
+                auto right = parseAndExpression();
+                if (!right.has_value())
+                    return right;
+                children.push_back(std::move(*right));
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if (children.size() == 1)
+        {
+            return children[0];
+        }
+
+        return QueryNode::makeOr(std::move(children));
+    }
+
+    // and_expr = factor+
+    auto QueryParser::parseAndExpression() -> std::expected<QueryNode, ParseError>
+    {
+        std::vector<QueryNode> children;
+
+        auto first = parseFactor();
+        if (!first.has_value())
+            return first;
+        children.push_back(std::move(*first));
 
         while (!eof())
         {
@@ -41,68 +84,74 @@ namespace lse
                 break;
 
             char c = peek();
+            // Если не оператор OR и не закрывающая скобка — продолжаем AND
+            if (c == '|' || c == ')')
+                break;
 
-            // OR
-            if (c == '|')
-            {
-                advance();
-                node.op = QueryOp::Or;
-                continue;
-            }
-
-            // NOT
-            if (c == '-' || c == '!')
-            {
-                advance();
-                skipWhitespace();
-
-                if (peek() == '"')
-                {
-                    auto result = parsePhrase();
-                    if (!result.has_value())
-                        return std::unexpected(result.error());
-                    result->negated = true;
-                    node.children.push_back(std::move(*result));
-                }
-                else
-                {
-                    auto result = parseTerm();
-                    if (!result.has_value())
-                        return std::unexpected(result.error());
-                    if (!result->empty())
-                    {
-                        QueryNode notNode;
-                        notNode.op = QueryOp::And;
-                        notNode.terms.push_back(*result);
-                        notNode.negated = true;
-                        node.children.push_back(std::move(notNode));
-                    }
-                }
-                continue;
-            }
-
-            // Phrase
-            if (c == '"')
-            {
-                auto result = parsePhrase();
-                if (!result.has_value())
-                    return std::unexpected(result.error());
-                node.children.push_back(std::move(*result));
-                continue;
-            }
-
-            // Term
-            auto result = parseTerm();
-            if (!result.has_value())
-                return std::unexpected(result.error());
-
-            if (!result->empty())
-            {
-                node.terms.push_back(*result);
-            }
+            auto factor = parseFactor();
+            if (!factor.has_value())
+                return factor;
+            children.push_back(std::move(*factor));
         }
 
-        return node;
+        if (children.size() == 1)
+        {
+            return children[0];
+        }
+
+        return QueryNode::makeAnd(std::move(children));
+    }
+
+    // factor = term | phrase | NOT factor | '(' expression ')'
+    auto QueryParser::parseFactor() -> std::expected<QueryNode, ParseError>
+    {
+        skipWhitespace();
+        if (eof())
+            return std::unexpected(ParseError::EmptyQuery);
+
+        char c = peek();
+
+        // NOT
+        if (c == '-' || c == '!')
+        {
+            advance();
+            skipWhitespace();
+            auto factor = parseFactor();
+            if (!factor.has_value())
+                return factor;
+            return QueryNode::makeNot(std::move(*factor));
+        }
+
+        // Phrase
+        if (c == '"')
+        {
+            return parsePhrase();
+        }
+
+        // Группировка скобками
+        if (c == '(')
+        {
+            advance(); // '('
+            auto expr = parseOrExpression();
+            if (!expr.has_value())
+                return expr;
+
+            skipWhitespace();
+            if (peek() != ')')
+            {
+                return std::unexpected(ParseError::UnexpectedCharacter);
+            }
+            advance(); // ')'
+            return expr;
+        }
+
+        // Term
+        auto term = parseTerm();
+        if (!term.has_value())
+            return std::unexpected(term.error());
+        if (term->empty())
+            return std::unexpected(ParseError::EmptyQuery);
+        return QueryNode::makeTerm(*term);
     }
 
     auto QueryParser::parseTerm() -> std::expected<std::string, ParseError>
@@ -131,8 +180,7 @@ namespace lse
             return std::unexpected(ParseError::UnmatchedQuotes);
         advance();
 
-        QueryNode phraseNode;
-        phraseNode.op = QueryOp::Phrase;
+        std::vector<PhrasePosition> positions;
 
         while (!eof() && peek() != '"')
         {
@@ -145,7 +193,7 @@ namespace lse
                 auto result = parsePhraseGroup();
                 if (!result.has_value())
                     return std::unexpected(result.error());
-                phraseNode.phrase_positions.push_back(*result);
+                positions.push_back(*result);
             }
             else
             {
@@ -156,7 +204,7 @@ namespace lse
                 {
                     PhrasePosition pos;
                     pos.alternatives.push_back(*result);
-                    phraseNode.phrase_positions.push_back(pos);
+                    positions.push_back(pos);
                 }
             }
         }
@@ -165,12 +213,12 @@ namespace lse
             return std::unexpected(ParseError::UnmatchedQuotes);
         advance();
 
-        if (phraseNode.phrase_positions.empty())
+        if (positions.empty())
         {
             return std::unexpected(ParseError::EmptyQuery);
         }
 
-        return phraseNode;
+        return QueryNode::makePhrase(std::move(positions));
     }
 
     auto QueryParser::parsePhraseGroup() -> std::expected<PhrasePosition, ParseError>

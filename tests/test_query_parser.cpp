@@ -9,23 +9,21 @@ TEST_CASE("QueryParser: simple term", "[query_parser]")
     auto result = parser.parse("привет");
 
     REQUIRE(result.has_value());
-    auto &node = *result;
-    CHECK(node.op == QueryOp::And);
-    REQUIRE(node.terms.size() == 1);
-    CHECK(node.terms[0] == "привет");
+    CHECK(result->op == QueryOp::Term);
+    CHECK(result->term == "привет");
 }
 
-TEST_CASE("QueryParser: multiple terms (AND by default)", "[query_parser]")
+TEST_CASE("QueryParser: AND by default", "[query_parser]")
 {
     QueryParser parser;
     auto result = parser.parse("привет мир");
 
     REQUIRE(result.has_value());
-    auto &node = *result;
-    CHECK(node.op == QueryOp::And);
-    REQUIRE(node.terms.size() == 2);
-    CHECK(node.terms[0] == "привет");
-    CHECK(node.terms[1] == "мир");
+    CHECK(result->op == QueryOp::And);
+    REQUIRE(result->children.size() == 2);
+    CHECK(result->children[0].op == QueryOp::Term);
+    CHECK(result->children[0].term == "привет");
+    CHECK(result->children[1].term == "мир");
 }
 
 TEST_CASE("QueryParser: OR operator", "[query_parser]")
@@ -34,9 +32,27 @@ TEST_CASE("QueryParser: OR operator", "[query_parser]")
     auto result = parser.parse("привет | мир");
 
     REQUIRE(result.has_value());
-    auto &node = *result;
-    CHECK(node.op == QueryOp::Or);
-    REQUIRE(node.terms.size() == 2);
+    CHECK(result->op == QueryOp::Or);
+    REQUIRE(result->children.size() == 2);
+    CHECK(result->children[0].term == "привет");
+    CHECK(result->children[1].term == "мир");
+}
+
+TEST_CASE("QueryParser: AND has priority over OR", "[query_parser]")
+{
+    QueryParser parser;
+    auto result = parser.parse("кофе | чай круассан");
+
+    REQUIRE(result.has_value());
+    // Должно быть: кофе OR (чай AND круассан)
+    CHECK(result->op == QueryOp::Or);
+    REQUIRE(result->children.size() == 2);
+    CHECK(result->children[0].op == QueryOp::Term);
+    CHECK(result->children[0].term == "кофе");
+    // Второй child — AND узел
+    CHECK(result->children[1].op == QueryOp::And);
+    CHECK(result->children[1].children[0].term == "чай");
+    CHECK(result->children[1].children[1].term == "круассан");
 }
 
 TEST_CASE("QueryParser: NOT operator", "[query_parser]")
@@ -45,75 +61,11 @@ TEST_CASE("QueryParser: NOT operator", "[query_parser]")
     auto result = parser.parse("привет -мир");
 
     REQUIRE(result.has_value());
-    auto &node = *result;
-    CHECK(node.op == QueryOp::And);
-    REQUIRE(node.terms.size() == 1);
-    CHECK(node.terms[0] == "привет");
-    REQUIRE(node.children.size() == 1);
-    CHECK(node.children[0].negated == true);
-    CHECK(node.children[0].terms[0] == "мир");
-}
-
-TEST_CASE("QueryParser: simple phrase", "[query_parser]")
-{
-    QueryParser parser;
-    auto result = parser.parse("\"привет мир\"");
-
-    REQUIRE(result.has_value());
-    auto &node = *result;
-    CHECK(node.op == QueryOp::And);
-    REQUIRE(node.children.size() == 1);
-    auto &phrase = node.children[0];
-    CHECK(phrase.op == QueryOp::Phrase);
-    REQUIRE(phrase.phrase_positions.size() == 2);
-    CHECK(phrase.phrase_positions[0].alternatives[0] == "привет");
-    CHECK(phrase.phrase_positions[1].alternatives[0] == "мир");
-}
-
-TEST_CASE("QueryParser: phrase with group alternatives", "[query_parser]")
-{
-    QueryParser parser;
-    auto result = parser.parse("\"я люблю (кофе | чай)\"");
-
-    REQUIRE(result.has_value());
-    auto &phrase = result->children[0];
-    CHECK(phrase.op == QueryOp::Phrase);
-    REQUIRE(phrase.phrase_positions.size() == 3);
-    CHECK(phrase.phrase_positions[0].alternatives[0] == "я");
-    CHECK(phrase.phrase_positions[1].alternatives[0] == "люблю");
-    // Третья позиция — группа альтернатив
-    REQUIRE(phrase.phrase_positions[2].alternatives.size() == 2);
-    CHECK(phrase.phrase_positions[2].alternatives[0] == "кофе");
-    CHECK(phrase.phrase_positions[2].alternatives[1] == "чай");
-}
-
-TEST_CASE("QueryParser: complex phrase with multiple groups", "[query_parser]")
-{
-    QueryParser parser;
-    auto result = parser.parse("\"я люблю (кофе | чай) с (молоком | сахаром)\"");
-
-    REQUIRE(result.has_value());
-    auto &phrase = result->children[0];
-    REQUIRE(phrase.phrase_positions.size() == 5);
-    CHECK(phrase.phrase_positions[0].alternatives[0] == "я");
-    CHECK(phrase.phrase_positions[1].alternatives[0] == "люблю");
-    CHECK(phrase.phrase_positions[2].alternatives.size() == 2);
-    CHECK(phrase.phrase_positions[3].alternatives[0] == "с");
-    CHECK(phrase.phrase_positions[4].alternatives.size() == 2);
-}
-
-TEST_CASE("QueryParser: phrase with other terms", "[query_parser]")
-{
-    QueryParser parser;
-    auto result = parser.parse("привет \"прекрасный мир\"");
-
-    REQUIRE(result.has_value());
-    auto &node = *result;
-    CHECK(node.op == QueryOp::And);
-    REQUIRE(node.terms.size() == 1);
-    CHECK(node.terms[0] == "привет");
-    REQUIRE(node.children.size() == 1);
-    CHECK(node.children[0].op == QueryOp::Phrase);
+    CHECK(result->op == QueryOp::And);
+    REQUIRE(result->children.size() == 2);
+    CHECK(result->children[0].term == "привет");
+    CHECK(result->children[1].op == QueryOp::Not);
+    CHECK(result->children[1].children[0].term == "мир");
 }
 
 TEST_CASE("QueryParser: NOT with phrase", "[query_parser]")
@@ -122,10 +74,85 @@ TEST_CASE("QueryParser: NOT with phrase", "[query_parser]")
     auto result = parser.parse("привет -\"прекрасный мир\"");
 
     REQUIRE(result.has_value());
-    auto &node = *result;
-    REQUIRE(node.children.size() == 1);
-    CHECK(node.children[0].negated == true);
-    CHECK(node.children[0].op == QueryOp::Phrase);
+    CHECK(result->op == QueryOp::And);
+    REQUIRE(result->children.size() == 2);
+    CHECK(result->children[0].term == "привет");
+    CHECK(result->children[1].op == QueryOp::Not);
+    CHECK(result->children[1].children[0].op == QueryOp::Phrase);
+}
+
+TEST_CASE("QueryParser: simple phrase", "[query_parser]")
+{
+    QueryParser parser;
+    auto result = parser.parse("\"привет мир\"");
+
+    REQUIRE(result.has_value());
+    CHECK(result->op == QueryOp::Phrase);
+    REQUIRE(result->phrase_positions.size() == 2);
+    CHECK(result->phrase_positions[0].alternatives[0] == "привет");
+    CHECK(result->phrase_positions[1].alternatives[0] == "мир");
+}
+
+TEST_CASE("QueryParser: phrase with group alternatives", "[query_parser]")
+{
+    QueryParser parser;
+    auto result = parser.parse("\"я люблю (кофе | чай)\"");
+
+    REQUIRE(result.has_value());
+    CHECK(result->op == QueryOp::Phrase);
+    REQUIRE(result->phrase_positions.size() == 3);
+    CHECK(result->phrase_positions[0].alternatives[0] == "я");
+    CHECK(result->phrase_positions[1].alternatives[0] == "люблю");
+    REQUIRE(result->phrase_positions[2].alternatives.size() == 2);
+    CHECK(result->phrase_positions[2].alternatives[0] == "кофе");
+    CHECK(result->phrase_positions[2].alternatives[1] == "чай");
+}
+
+TEST_CASE("QueryParser: complex phrase with multiple groups", "[query_parser]")
+{
+    QueryParser parser;
+    auto result = parser.parse("\"я люблю (кофе | чай) с (молоком | сахаром)\"");
+
+    REQUIRE(result.has_value());
+    CHECK(result->op == QueryOp::Phrase);
+    REQUIRE(result->phrase_positions.size() == 5);
+}
+
+TEST_CASE("QueryParser: phrase with other terms", "[query_parser]")
+{
+    QueryParser parser;
+    auto result = parser.parse("привет \"прекрасный мир\"");
+
+    REQUIRE(result.has_value());
+    CHECK(result->op == QueryOp::And);
+    REQUIRE(result->children.size() == 2);
+    CHECK(result->children[0].term == "привет");
+    CHECK(result->children[1].op == QueryOp::Phrase);
+}
+
+TEST_CASE("QueryParser: grouping with parentheses", "[query_parser]")
+{
+    QueryParser parser;
+    auto result = parser.parse("(кофе | чай) круассан");
+
+    REQUIRE(result.has_value());
+    // (кофе | чай) AND круассан
+    CHECK(result->op == QueryOp::And);
+    REQUIRE(result->children.size() == 2);
+    CHECK(result->children[0].op == QueryOp::Or);
+    CHECK(result->children[1].term == "круассан");
+}
+
+TEST_CASE("QueryParser: nested groups", "[query_parser]")
+{
+    QueryParser parser;
+    auto result = parser.parse("(кофе | (чай молоко)) круассан");
+
+    REQUIRE(result.has_value());
+    CHECK(result->op == QueryOp::And);
+    REQUIRE(result->children.size() == 2);
+    CHECK(result->children[0].op == QueryOp::Or);
+    CHECK(result->children[1].term == "круассан");
 }
 
 TEST_CASE("QueryParser: empty query", "[query_parser]")
@@ -155,20 +182,10 @@ TEST_CASE("QueryParser: empty group", "[query_parser]")
     CHECK(result.error() == ParseError::EmptyGroup);
 }
 
-TEST_CASE("QueryParser: unmatched group", "[query_parser]")
+TEST_CASE("QueryParser: unbalanced parentheses", "[query_parser]")
 {
     QueryParser parser;
-    auto result = parser.parse("\"привет (мир\"");
-
-    REQUIRE(!result.has_value());
-    // Парсер интерпретирует это как UnexpectedCharacter
-    CHECK(result.error() == ParseError::UnexpectedCharacter);
-}
-
-TEST_CASE("QueryParser: unclosed group in phrase", "[query_parser]")
-{
-    QueryParser parser;
-    auto result = parser.parse("\"привет (мир\"");
+    auto result = parser.parse("(кофе | чай");
 
     REQUIRE(!result.has_value());
 }

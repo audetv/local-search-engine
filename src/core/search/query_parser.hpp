@@ -18,17 +18,27 @@ namespace lse
     class QueryParser
     {
     public:
-        // Парсит строку в QueryNode.
         // is_query_string: true → AND по умолчанию + операторы
-        //                 false → OR по умолчанию, операторы как текст
-        auto parse(std::string_view query, [[maybe_unused]] bool is_query_string = true)
+        //                 false → OR по умолчанию, операторы как текст (для match)
+        auto parse(std::string_view query, bool is_query_string = true)
             -> std::expected<QueryNode, ParseError>;
 
     private:
         std::string_view query_;
         size_t pos_ = 0;
+        bool is_query_string_ = true;
 
-        auto parseExpression() -> std::expected<QueryNode, ParseError>;
+        // expression = or_expr
+        auto parseOrExpression() -> std::expected<QueryNode, ParseError>;
+
+        // or_expr = and_expr ('|' and_expr)*
+        auto parseAndExpression() -> std::expected<QueryNode, ParseError>;
+
+        // and_expr = factor (factor)*  (AND по умолчанию)
+
+        // factor = term | phrase | NOT factor | '(' expression ')'
+        auto parseFactor() -> std::expected<QueryNode, ParseError>;
+
         auto parseTerm() -> std::expected<std::string, ParseError>;
         auto parsePhrase() -> std::expected<QueryNode, ParseError>;
         auto parsePhraseGroup() -> std::expected<PhrasePosition, ParseError>;
