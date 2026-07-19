@@ -336,22 +336,21 @@ namespace lse
         result.reserve(s.size());
         for (size_t i = 0; i < s.size();)
         {
-            unsigned char c = s[i];
-            // Кириллица А-Я (0xD0 0x90-0xAF) → а-я (0xD0 0xB0-0xBF)
+            unsigned char c = static_cast<unsigned char>(s[i]);
             if (c == 0xD0 && i + 1 < s.size())
             {
-                unsigned char next = s[i + 1];
+                unsigned char next = static_cast<unsigned char>(s[i + 1]);
                 if (next >= 0x90 && next <= 0xAF)
                 {
-                    result += char(0xD0);
-                    result += char(next + 0x20);
+                    result += static_cast<char>(0xD0);
+                    result += static_cast<char>(next + static_cast<unsigned char>(0x20));
                     i += 2;
                     continue;
                 }
                 if (next == 0x81)
-                { // Ё
-                    result += char(0xD1);
-                    result += char(0x91);
+                {
+                    result += static_cast<char>(0xD1);
+                    result += static_cast<char>(0x91);
                     i += 2;
                     continue;
                 }
@@ -359,7 +358,7 @@ namespace lse
             // ASCII верхний регистр
             if (c >= 'A' && c <= 'Z')
             {
-                result += char(c + ('a' - 'A'));
+                result += static_cast<char>(c + ('a' - 'A'));
                 i++;
                 continue;
             }
