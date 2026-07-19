@@ -9,6 +9,7 @@
 #include "core/search/query_builder.hpp"
 #include "core/book_indexer.hpp"
 #include "core/parser/genre_mapper.hpp"
+#include "core/remote/manticore_client.hpp"
 
 using namespace lse;
 using namespace std::chrono;
@@ -139,6 +140,46 @@ int main(int argc, char *argv[])
             writer.close();
 
             reader.open(idx_path);
+            continue;
+        }
+
+        // Команда remote
+        if (line.starts_with("remote "))
+        {
+            ManticoreConfig config;
+            config.load();
+
+            if (!config.valid())
+            {
+                std::cout << "Remote search not configured. Set LSE_API_KEY or ~/.local-search-engine/api.key\n";
+                continue;
+            }
+
+            ManticoreClient client(config);
+            std::string query = line.substr(7);
+
+            auto start = high_resolution_clock::now();
+            auto result = client.search(query, "query_string", 10);
+            auto end = high_resolution_clock::now();
+
+            if (!result.has_value())
+            {
+                std::cout << "Remote search error: " << static_cast<int>(result.error()) << "\n";
+                continue;
+            }
+
+            auto duration = duration_cast<milliseconds>(end - start);
+
+            std::cout << "\nRemote: " << result->total << " results"
+                      << " in " << result->took_ms << " ms (client: " << duration.count() << " ms)\n\n";
+
+            for (const auto &hit : result->hits)
+            {
+                std::cout << "  score=" << hit.score
+                          << " title=" << hit.title
+                          << " author=" << hit.author << "\n";
+            }
+            std::cout << std::endl;
             continue;
         }
 

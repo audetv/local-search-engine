@@ -25,14 +25,25 @@ ctest --preset=debug
 ```
 
 ## Проверка сборки
-```
+```bash
 # Запуск приложения
 ./build/debug/src/local-search-engine
-
+```
 # Создание индекса с маппингом жанров
+```bash
 ./build/debug/src/local-search-engine index test_books ./user_index --genres ./config/genres_map.csv
+```
+
+# Подключение к Manticore Search
+```bash
+export LSE_API_KEY="1234-user-key"
+export LSE_SERVER_URL="http://localhost:18081"
+./build/debug/src/local-search-engine
+> remote бои на танках
+```
 
 # Запуск тестов
+```bash
 ctest --preset=debug
 ```
 
