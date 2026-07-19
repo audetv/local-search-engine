@@ -11,7 +11,8 @@ namespace lse
     {
         EmptyQuery,
         UnmatchedQuotes,
-        UnexpectedCharacter
+        UnexpectedCharacter,
+        EmptyGroup
     };
 
     class QueryParser
@@ -29,9 +30,9 @@ namespace lse
 
         auto parseExpression() -> std::expected<QueryNode, ParseError>;
         auto parseTerm() -> std::expected<std::string, ParseError>;
-        auto parsePhrase() -> std::expected<std::string, ParseError>;
+        auto parsePhrase() -> std::expected<QueryNode, ParseError>;
+        auto parsePhraseGroup() -> std::expected<PhrasePosition, ParseError>;
 
-        bool isOperator(char c) const;
         void skipWhitespace();
         bool eof() const { return pos_ >= query_.size(); }
         char peek() const { return eof() ? '\0' : query_[pos_]; }

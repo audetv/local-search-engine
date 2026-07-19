@@ -1,6 +1,5 @@
 #include "query_parser.hpp"
 #include <cctype>
-#include <algorithm>
 
 namespace lse
 {
@@ -57,29 +56,27 @@ namespace lse
                 advance();
                 skipWhitespace();
 
-                std::string term;
                 if (peek() == '"')
                 {
                     auto result = parsePhrase();
                     if (!result.has_value())
                         return std::unexpected(result.error());
-                    term = *result;
+                    result->negated = true;
+                    node.children.push_back(std::move(*result));
                 }
                 else
                 {
                     auto result = parseTerm();
                     if (!result.has_value())
                         return std::unexpected(result.error());
-                    term = *result;
-                }
-
-                if (!term.empty())
-                {
-                    QueryNode notNode;
-                    notNode.op = QueryOp::And;
-                    notNode.terms.push_back(term);
-                    notNode.negated = true;
-                    node.children.push_back(std::move(notNode));
+                    if (!result->empty())
+                    {
+                        QueryNode notNode;
+                        notNode.op = QueryOp::And;
+                        notNode.terms.push_back(*result);
+                        notNode.negated = true;
+                        node.children.push_back(std::move(notNode));
+                    }
                 }
                 continue;
             }
@@ -90,11 +87,7 @@ namespace lse
                 auto result = parsePhrase();
                 if (!result.has_value())
                     return std::unexpected(result.error());
-
-                QueryNode phraseNode;
-                phraseNode.op = QueryOp::Phrase;
-                phraseNode.terms.push_back(*result);
-                node.children.push_back(std::move(phraseNode));
+                node.children.push_back(std::move(*result));
                 continue;
             }
 
@@ -124,7 +117,7 @@ namespace lse
             char c = peek();
             if (c == ' ' || c == '\t' || c == '\n' || c == '\r')
                 break;
-            if (c == '|' || c == '-' || c == '!' || c == '"')
+            if (c == '|' || c == '-' || c == '!' || c == '"' || c == '(' || c == ')')
                 break;
             term += advance();
         }
@@ -132,23 +125,99 @@ namespace lse
         return term;
     }
 
-    auto QueryParser::parsePhrase() -> std::expected<std::string, ParseError>
+    auto QueryParser::parsePhrase() -> std::expected<QueryNode, ParseError>
     {
         if (peek() != '"')
             return std::unexpected(ParseError::UnmatchedQuotes);
         advance();
 
-        std::string phrase;
+        QueryNode phraseNode;
+        phraseNode.op = QueryOp::Phrase;
+
         while (!eof() && peek() != '"')
         {
-            phrase += advance();
+            skipWhitespace();
+            if (eof() || peek() == '"')
+                break;
+
+            if (peek() == '(')
+            {
+                auto result = parsePhraseGroup();
+                if (!result.has_value())
+                    return std::unexpected(result.error());
+                phraseNode.phrase_positions.push_back(*result);
+            }
+            else
+            {
+                auto result = parseTerm();
+                if (!result.has_value())
+                    return std::unexpected(result.error());
+                if (!result->empty())
+                {
+                    PhrasePosition pos;
+                    pos.alternatives.push_back(*result);
+                    phraseNode.phrase_positions.push_back(pos);
+                }
+            }
         }
 
         if (eof())
             return std::unexpected(ParseError::UnmatchedQuotes);
         advance();
 
-        return phrase;
+        if (phraseNode.phrase_positions.empty())
+        {
+            return std::unexpected(ParseError::EmptyQuery);
+        }
+
+        return phraseNode;
+    }
+
+    auto QueryParser::parsePhraseGroup() -> std::expected<PhrasePosition, ParseError>
+    {
+        if (peek() != '(')
+            return std::unexpected(ParseError::UnexpectedCharacter);
+        advance();
+
+        PhrasePosition pos;
+
+        while (!eof() && peek() != ')')
+        {
+            skipWhitespace();
+            if (eof() || peek() == ')')
+                break;
+
+            auto term = parseTerm();
+            if (!term.has_value())
+                return std::unexpected(term.error());
+            if (!term->empty())
+            {
+                pos.alternatives.push_back(*term);
+            }
+
+            skipWhitespace();
+            if (peek() == '|')
+            {
+                advance();
+            }
+            else if (peek() != ')')
+            {
+                return std::unexpected(ParseError::UnexpectedCharacter);
+            }
+        }
+
+        if (eof() || peek() != ')')
+        {
+            return std::unexpected(ParseError::UnmatchedQuotes);
+        }
+        advance();
+
+        if (pos.alternatives.empty())
+        {
+            return std::unexpected(ParseError::EmptyGroup);
+        }
+
+        return pos;
     }
 
     void QueryParser::skipWhitespace()
