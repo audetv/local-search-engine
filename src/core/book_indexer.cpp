@@ -48,8 +48,8 @@ namespace lse
         return result;
     }
 
-    BookIndexer::BookIndexer(IndexWriter &writer, Stemmer &stemmer)
-        : writer_(writer), stemmer_(stemmer)
+    BookIndexer::BookIndexer(IndexWriter &writer, Stemmer &stemmer, GenreMapper &genre_mapper)
+        : writer_(writer), stemmer_(stemmer), genre_mapper_(genre_mapper)
     {
         tokenizer_opts_.normalize_yo = true;
         tokenizer_opts_.keep_digits = true;
@@ -130,6 +130,12 @@ namespace lse
             {
                 doc.genre = meta.genre;
             }
+        }
+
+        // Применяем маппинг жанров
+        if (!genre_mapper_.empty())
+        {
+            doc.genre = genre_mapper_.map(doc.genre);
         }
 
         spdlog::info("Indexing: {} (author={}, genre={})", doc.title, doc.author, doc.genre);

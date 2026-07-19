@@ -8,6 +8,7 @@
 #include "core/search/search_engine.hpp"
 #include "core/search/query_builder.hpp"
 #include "core/book_indexer.hpp"
+#include "core/parser/genre_mapper.hpp"
 
 using namespace lse;
 using namespace std::chrono;
@@ -42,7 +43,9 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        BookIndexer book_indexer(writer, stemmer);
+        GenreMapper genre_mapper;
+        genre_mapper.load("genres_map.csv");
+        BookIndexer book_indexer(writer, stemmer, genre_mapper);
 
         auto start = high_resolution_clock::now();
         auto result = book_indexer.indexDirectory(path);
@@ -114,7 +117,10 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            BookIndexer book_indexer(writer, stemmer);
+            GenreMapper genre_mapper;
+            genre_mapper.load("genres_map.csv");
+            BookIndexer book_indexer(writer, stemmer, genre_mapper);
+
             auto result = book_indexer.indexDirectory(dir_path);
             if (result.has_value())
             {
