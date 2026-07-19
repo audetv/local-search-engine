@@ -143,6 +143,14 @@ namespace lse
         // Вычисляем book_id (используем название и автора для детерминированного ID)
         int64_t book_id = generateBookId(file_path.string(), doc.title, doc.author);
 
+        // Проверяем, проиндексирована ли уже эта книга
+        if (writer_.hasChunks(book_id))
+        {
+            spdlog::info("Skipping (already indexed): {}", doc.title);
+            indexed_files_++;
+            return std::vector<BookInfo>{};
+        }
+
         // Upsert книги
         auto upsert_result = writer_.upsertBook(book_id, doc.title, doc.author, doc.genre, "ru", file_path.string());
         if (!upsert_result.has_value())

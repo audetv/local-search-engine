@@ -50,6 +50,9 @@ namespace lse
                         const std::string &language, const std::string &file_path)
             -> std::expected<void, IndexError>;
 
+        // Проверяет, есть ли чанки для книги
+        bool hasChunks(int64_t book_id) const;
+
         // Статистика
         uint64_t docCount() const { return doc_count_; }
 

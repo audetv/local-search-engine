@@ -25,6 +25,16 @@ int main(int argc, char *argv[])
 
     Stemmer stemmer(StemmerLanguage::Russian);
 
+    // Парсим --genres
+    std::string genres_path = "genres_map.csv";
+    for (int i = 1; i < argc; ++i)
+    {
+        if (std::string(argv[i]) == "--genres" && i + 1 < argc)
+        {
+            genres_path = argv[++i];
+        }
+    }
+
     // Режим 1: индексация
     if (argc >= 3 && std::string(argv[1]) == "index")
     {
@@ -44,7 +54,7 @@ int main(int argc, char *argv[])
         }
 
         GenreMapper genre_mapper;
-        genre_mapper.load("genres_map.csv");
+        genre_mapper.load(genres_path);
         BookIndexer book_indexer(writer, stemmer, genre_mapper);
 
         auto start = high_resolution_clock::now();
@@ -118,7 +128,7 @@ int main(int argc, char *argv[])
             }
 
             GenreMapper genre_mapper;
-            genre_mapper.load("genres_map.csv");
+            genre_mapper.load(genres_path);
             BookIndexer book_indexer(writer, stemmer, genre_mapper);
 
             auto result = book_indexer.indexDirectory(dir_path);

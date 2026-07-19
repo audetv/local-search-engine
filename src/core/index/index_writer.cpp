@@ -549,4 +549,28 @@ namespace lse
         return result;
     }
 
+    bool IndexWriter::hasChunks(int64_t book_id) const
+    {
+        if (!db_)
+            return false;
+
+        sqlite3_stmt *stmt;
+        const char *sql = "SELECT COUNT(*) FROM chunks WHERE book_id = ?";
+        if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        {
+            return false;
+        }
+
+        sqlite3_bind_int64(stmt, 1, book_id);
+
+        bool has = false;
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            has = sqlite3_column_int(stmt, 0) > 0;
+        }
+
+        sqlite3_finalize(stmt);
+        return has;
+    }
+
 } // namespace lse
