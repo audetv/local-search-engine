@@ -80,9 +80,9 @@
 | 3.1 | Фильтры: жанр, автор, название | ✅ |
 | 3.2 | Подсветка | ✅ |
 | 3.3 | QueryNode + QueryParser + группировка | ✅ |
-| 3.4 | `SearchEngine` — выполнение QueryNode над индексом | Критично |
-| 3.5 | `QueryType`: QueryString, Match, MatchPhrase, MatchAll | Критично |
-| 3.6 | Интеграция в `IndexReader::search()` | Критично |
+| 3.4 | `SearchEngine` — выполнение QueryNode над индексом | 	✅ |
+| 3.5 | `QueryBuilder` | ✅ |
+| 3.6 | Интеграция в main.cpp | Критично |
 | 3.7 | Маппинг жанров | Средне |
 
 ---

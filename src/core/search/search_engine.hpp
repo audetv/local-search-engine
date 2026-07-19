@@ -17,13 +17,20 @@ namespace lse
     public:
         SearchEngine(IndexReader &reader, Stemmer &stemmer);
 
-        // Выполняет поиск по QueryNode
+        // Выполняет QueryNode
         auto execute(const QueryNode &query,
                      size_t top_k = 20,
                      const std::string &genre_filter = "",
                      const std::string &author_filter = "",
                      const std::string &title_filter = "",
                      const std::vector<std::string> &highlight_terms = {})
+            -> std::expected<std::vector<std::unique_ptr<SearchHit>>, IndexError>;
+
+        // Все документы (без полнотекстового поиска)
+        auto matchAll(size_t top_k = 20,
+                      const std::string &genre_filter = "",
+                      const std::string &author_filter = "",
+                      const std::string &title_filter = "")
             -> std::expected<std::vector<std::unique_ptr<SearchHit>>, IndexError>;
 
     private:

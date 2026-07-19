@@ -98,6 +98,25 @@ namespace lse
         return results;
     }
 
+    auto SearchEngine::matchAll([[maybe_unused]] size_t top_k,
+                                [[maybe_unused]] const std::string &genre_filter,
+                                [[maybe_unused]] const std::string &author_filter,
+                                [[maybe_unused]] const std::string &title_filter)
+        -> std::expected<std::vector<std::unique_ptr<SearchHit>>, IndexError>
+    {
+
+        std::vector<std::unique_ptr<SearchHit>> results;
+
+        // Проходим по всем doc_id через getChunkMetadata
+        // Но у нас нет метода для перебора всех doc_id.
+        // Пока используем запрос к SQLite напрямую через reader_
+        // Добавим метод getAllDocIds в IndexReader позже
+
+        // Временная реализация: возвращаем пустой список
+        // TODO: реализовать через IndexReader::getAllDocIds()
+        return std::vector<std::unique_ptr<SearchHit>>{};
+    }
+
     auto SearchEngine::evaluateNode(const QueryNode &node,
                                     std::unordered_map<uint64_t, float> &doc_scores) const
         -> std::expected<void, IndexError>

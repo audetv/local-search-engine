@@ -14,6 +14,7 @@ add_executable(lse_tests
     test_filename_parser.cpp
     test_query_parser.cpp
     test_search_engine.cpp
+    test_query_builder.cpp
 )
 
 target_link_libraries(lse_tests PRIVATE
