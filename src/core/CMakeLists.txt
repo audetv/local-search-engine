@@ -20,6 +20,7 @@ add_library(lse_core STATIC
     parser/docx_parser.cpp
     parser/filename_parser.cpp
     chunker/chunker.cpp
+    search/query_parser.cpp
     book_indexer.cpp
     ${STEMMER_C_FILES}
 )

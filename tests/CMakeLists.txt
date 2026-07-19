@@ -12,6 +12,7 @@ add_executable(lse_tests
     test_memory_mapped_file.cpp
     test_index_persistence.cpp
     test_filename_parser.cpp
+    test_query_parser.cpp
 )
 
 target_link_libraries(lse_tests PRIVATE
