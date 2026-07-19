@@ -1,6 +1,7 @@
 #pragma once
 
 #include "query_node.hpp"
+#include "query_type.hpp"
 #include <string_view>
 #include <expected>
 
@@ -18,15 +19,13 @@ namespace lse
     class QueryParser
     {
     public:
-        // is_query_string: true → AND по умолчанию + операторы
-        //                 false → OR по умолчанию, операторы как текст (для match)
-        auto parse(std::string_view query, bool is_query_string = true)
+        auto parse(std::string_view query, QueryType type = QueryType::QueryString)
             -> std::expected<QueryNode, ParseError>;
 
     private:
         std::string_view query_;
         size_t pos_ = 0;
-        bool is_query_string_ = true;
+        QueryType type_ = QueryType::QueryString;
 
         // expression = or_expr
         auto parseOrExpression() -> std::expected<QueryNode, ParseError>;

@@ -3,13 +3,38 @@
 namespace lse
 {
 
-    auto QueryParser::parse(std::string_view query, bool is_query_string)
+    auto QueryParser::parse(std::string_view query, QueryType type)
         -> std::expected<QueryNode, ParseError>
     {
 
         query_ = query;
         pos_ = 0;
-        is_query_string_ = is_query_string;
+        type_ = type;
+
+        switch (type_)
+        {
+        case QueryType::MatchAll:
+            return QueryNode::makeAnd({});
+
+        case QueryType::MatchPhrase:
+        {
+            // Оборачиваем весь запрос в кавычки
+            std::string quoted = "\"" + std::string(query) + "\"";
+            query_ = quoted;
+            pos_ = 0;
+            auto result = parseOrExpression();
+            if (!result.has_value())
+                return result;
+            skipWhitespace();
+            if (!eof())
+                return std::unexpected(ParseError::UnexpectedCharacter);
+            return result;
+        }
+
+        case QueryType::Match:
+        case QueryType::QueryString:
+            break;
+        }
 
         if (query.empty())
         {
@@ -24,6 +49,25 @@ namespace lse
         if (!eof())
         {
             return std::unexpected(ParseError::UnexpectedCharacter);
+        }
+
+        // Для Match — если нет операторов, заменяем AND на OR
+        if (type_ == QueryType::Match && result->op == QueryOp::And && result->children.size() > 1)
+        {
+            // Только если это простой список термов (без явных операторов)
+            bool has_operators = false;
+            for (const auto &child : result->children)
+            {
+                if (child.op != QueryOp::Term)
+                {
+                    has_operators = true;
+                    break;
+                }
+            }
+            if (!has_operators)
+            {
+                result->op = QueryOp::Or;
+            }
         }
 
         return result;

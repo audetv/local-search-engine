@@ -189,3 +189,36 @@ TEST_CASE("QueryParser: unbalanced parentheses", "[query_parser]")
 
     REQUIRE(!result.has_value());
 }
+
+TEST_CASE("QueryParser: MatchAll type", "[query_parser]")
+{
+    QueryParser parser;
+    auto result = parser.parse("любой текст", QueryType::MatchAll);
+    REQUIRE(result.has_value());
+    CHECK(result->op == QueryOp::And);
+    CHECK(result->children.empty());
+}
+
+TEST_CASE("QueryParser: MatchPhrase type", "[query_parser]")
+{
+    QueryParser parser;
+    auto result = parser.parse("привет мир", QueryType::MatchPhrase);
+    REQUIRE(result.has_value());
+    CHECK(result->op == QueryOp::Phrase);
+}
+
+TEST_CASE("QueryParser: Match type defaults to OR", "[query_parser]")
+{
+    QueryParser parser;
+    auto result = parser.parse("привет мир", QueryType::Match);
+    REQUIRE(result.has_value());
+    CHECK(result->op == QueryOp::Or);
+}
+
+TEST_CASE("QueryParser: QueryString type defaults to AND", "[query_parser]")
+{
+    QueryParser parser;
+    auto result = parser.parse("привет мир", QueryType::QueryString);
+    REQUIRE(result.has_value());
+    CHECK(result->op == QueryOp::And);
+}
