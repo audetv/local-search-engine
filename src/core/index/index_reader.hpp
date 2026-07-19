@@ -46,7 +46,11 @@ namespace lse
         SearchHit() = default;
 
         SearchHit(SearchHit &&other) noexcept
-            : doc_id(other.doc_id), bm25_score(other.bm25_score), title(std::move(other.title)), author(std::move(other.author)), genre(std::move(other.genre)), content(std::move(other.content)), highlights(std::move(other.highlights)), book_id(other.book_id), chunk_num(other.chunk_num)
+            : doc_id(other.doc_id), bm25_score(other.bm25_score),
+              title(std::move(other.title)), author(std::move(other.author)),
+              genre(std::move(other.genre)), content(std::move(other.content)),
+              highlights(std::move(other.highlights)), book_id(other.book_id),
+              chunk_num(other.chunk_num)
         {
         }
 
@@ -110,7 +114,8 @@ namespace lse
         double avgDocLength() const { return avg_doc_length_; }
 
         // Получить метаданные чанка по doc_id
-        auto getChunkMetadata(uint64_t doc_id) -> std::expected<SearchHit, IndexError>;
+        auto getChunkMetadata(uint64_t doc_id)
+            -> std::expected<std::unique_ptr<SearchHit>, IndexError>;
 
     private:
         std::filesystem::path index_dir_;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../index/index_reader.hpp"
+#include "../tokenizer/stemmer.hpp"
 #include "query_node.hpp"
 #include <memory>
 #include <vector>
@@ -14,7 +15,7 @@ namespace lse
     class SearchEngine
     {
     public:
-        explicit SearchEngine(IndexReader &reader);
+        SearchEngine(IndexReader &reader, Stemmer &stemmer);
 
         // Выполняет поиск по QueryNode
         auto execute(const QueryNode &query,
@@ -27,10 +28,14 @@ namespace lse
 
     private:
         IndexReader &reader_;
+        Stemmer &stemmer_;
 
         auto evaluateNode(const QueryNode &node,
                           std::unordered_map<uint64_t, float> &doc_scores) const
             -> std::expected<void, IndexError>;
+
+        // Стеммирует терм
+        std::string stemTerm(const std::string &term) const;
     };
 
 } // namespace lse

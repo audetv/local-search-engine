@@ -322,8 +322,10 @@ namespace lse
         return results;
     }
 
-    auto IndexReader::getChunkMetadata(uint64_t doc_id) -> std::expected<SearchHit, IndexError>
+    auto IndexReader::getChunkMetadata(uint64_t doc_id)
+        -> std::expected<std::unique_ptr<SearchHit>, IndexError>
     {
+
         const char *sql = R"(
         SELECT c.book_id, c.chunk_num, b.title, b.author, b.genre, c.content
         FROM chunks c
@@ -340,14 +342,15 @@ namespace lse
 
         sqlite3_bind_int64(stmt, 1, static_cast<sqlite3_int64>(doc_id));
 
-        std::expected<SearchHit, IndexError> result = std::unexpected(IndexError::CorruptedIndex);
+        std::expected<std::unique_ptr<SearchHit>, IndexError> result =
+            std::unexpected(IndexError::CorruptedIndex);
 
         if (sqlite3_step(stmt) == SQLITE_ROW)
         {
-            SearchHit hit;
-            hit.doc_id = doc_id;
-            hit.book_id = sqlite3_column_int64(stmt, 0);
-            hit.chunk_num = static_cast<uint32_t>(sqlite3_column_int(stmt, 1));
+            auto hit = std::make_unique<SearchHit>();
+            hit->doc_id = doc_id;
+            hit->book_id = sqlite3_column_int64(stmt, 0);
+            hit->chunk_num = static_cast<uint32_t>(sqlite3_column_int(stmt, 1));
 
             const char *title = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
             const char *author = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
@@ -355,13 +358,13 @@ namespace lse
             const char *content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5));
 
             if (title)
-                hit.title = title;
+                hit->title = title;
             if (author)
-                hit.author = author;
+                hit->author = author;
             if (genre)
-                hit.genre = genre;
+                hit->genre = genre;
             if (content)
-                hit.content = content;
+                hit->content = content;
 
             result = std::move(hit);
         }

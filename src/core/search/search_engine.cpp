@@ -6,7 +6,8 @@
 namespace lse
 {
 
-    SearchEngine::SearchEngine(IndexReader &reader) : reader_(reader) {}
+    SearchEngine::SearchEngine(IndexReader &reader, Stemmer &stemmer)
+        : reader_(reader), stemmer_(stemmer) {}
 
     auto SearchEngine::execute(const QueryNode &query,
                                size_t top_k,
@@ -49,7 +50,7 @@ namespace lse
             if (!meta.has_value())
                 continue;
 
-            auto hit = std::make_unique<SearchHit>(std::move(*meta));
+            auto hit = std::move(*meta);
             hit->bm25_score = score;
 
             if (!title_filter.empty() && hit->title.find(title_filter) == std::string::npos)
@@ -106,11 +107,12 @@ namespace lse
         {
         case QueryOp::Term:
         {
-            auto postings_result = reader_.getTermPostings(node.term);
+            std::string stemmed = stemTerm(node.term);
+            auto postings_result = reader_.getTermPostings(stemmed);
             if (!postings_result.has_value())
                 return std::unexpected(postings_result.error());
 
-            double idf = reader_.getTermIDF(node.term);
+            double idf = reader_.getTermIDF(stemmed);
             if (idf == 0.0)
                 break;
 
@@ -129,30 +131,45 @@ namespace lse
 
             for (const auto &child : node.children)
             {
-                std::unordered_map<uint64_t, float> child_scores;
-                auto res = evaluateNode(child, child_scores);
-                if (!res.has_value())
-                    return res;
-
-                if (first)
+                if (child.op == QueryOp::Not)
                 {
-                    combined = std::move(child_scores);
-                    first = false;
+                    // Исключаем документы
+                    std::unordered_map<uint64_t, float> excluded;
+                    auto res = evaluateNode(child.children[0], excluded);
+                    if (!res.has_value())
+                        return res;
+                    for (const auto &[doc_id, _] : excluded)
+                    {
+                        combined.erase(doc_id);
+                    }
                 }
                 else
                 {
-                    std::unordered_map<uint64_t, float> intersected;
-                    for (const auto &[doc_id, score] : child_scores)
+                    std::unordered_map<uint64_t, float> child_scores;
+                    auto res = evaluateNode(child, child_scores);
+                    if (!res.has_value())
+                        return res;
+
+                    if (first)
                     {
-                        auto it = combined.find(doc_id);
-                        if (it != combined.end())
-                        {
-                            intersected[doc_id] = it->second + score;
-                        }
+                        combined = std::move(child_scores);
+                        first = false;
                     }
-                    combined = std::move(intersected);
+                    else
+                    {
+                        std::unordered_map<uint64_t, float> intersected;
+                        for (const auto &[doc_id, score] : child_scores)
+                        {
+                            auto it = combined.find(doc_id);
+                            if (it != combined.end())
+                            {
+                                intersected[doc_id] = it->second + score;
+                            }
+                        }
+                        combined = std::move(intersected);
+                    }
                 }
-                if (combined.empty())
+                if (combined.empty() && first == false)
                     break;
             }
 
@@ -201,11 +218,12 @@ namespace lse
 
             for (const auto &alt : node.phrase_positions[0].alternatives)
             {
-                auto postings_result = reader_.getTermPostings(alt);
+                std::string stemmed = stemTerm(alt);
+                auto postings_result = reader_.getTermPostings(stemmed);
                 if (!postings_result.has_value())
                     continue;
 
-                double idf = reader_.getTermIDF(alt);
+                double idf = reader_.getTermIDF(stemmed);
                 for (const auto &p : *postings_result)
                 {
                     float score = static_cast<float>(
@@ -222,8 +240,8 @@ namespace lse
             {
                 bool phrase_match = false;
 
-                // Для каждой стартовой позиции первого терма
-                auto first_postings = reader_.getTermPostings(node.phrase_positions[0].alternatives[0]);
+                std::string first_stemmed = stemTerm(node.phrase_positions[0].alternatives[0]);
+                auto first_postings = reader_.getTermPostings(first_stemmed);
                 if (!first_postings.has_value())
                     continue;
 
@@ -244,7 +262,8 @@ namespace lse
 
                             for (const auto &alt : node.phrase_positions[i].alternatives)
                             {
-                                auto alt_postings = reader_.getTermPostings(alt);
+                                std::string alt_stemmed = stemTerm(alt);
+                                auto alt_postings = reader_.getTermPostings(alt_stemmed);
                                 if (!alt_postings.has_value())
                                     continue;
 
@@ -289,5 +308,10 @@ namespace lse
         }
 
         return {};
+    }
+
+    std::string SearchEngine::stemTerm(const std::string &term) const
+    {
+        return std::string(stemmer_.stem(term));
     }
 } // namespace lse
