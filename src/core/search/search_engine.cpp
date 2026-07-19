@@ -1,6 +1,7 @@
 #include "search_engine.hpp"
 #include <sqlite3.h>
 #include <algorithm>
+#include <clocale>
 #include <cctype>
 
 namespace lse
@@ -329,8 +330,48 @@ namespace lse
         return {};
     }
 
+    static std::string to_lower_utf8(const std::string &s)
+    {
+        std::string result;
+        result.reserve(s.size());
+        for (size_t i = 0; i < s.size();)
+        {
+            unsigned char c = s[i];
+            // Кириллица А-Я (0xD0 0x90-0xAF) → а-я (0xD0 0xB0-0xBF)
+            if (c == 0xD0 && i + 1 < s.size())
+            {
+                unsigned char next = s[i + 1];
+                if (next >= 0x90 && next <= 0xAF)
+                {
+                    result += char(0xD0);
+                    result += char(next + 0x20);
+                    i += 2;
+                    continue;
+                }
+                if (next == 0x81)
+                { // Ё
+                    result += char(0xD1);
+                    result += char(0x91);
+                    i += 2;
+                    continue;
+                }
+            }
+            // ASCII верхний регистр
+            if (c >= 'A' && c <= 'Z')
+            {
+                result += char(c + ('a' - 'A'));
+                i++;
+                continue;
+            }
+            result += s[i];
+            i++;
+        }
+        return result;
+    }
+
     std::string SearchEngine::stemTerm(const std::string &term) const
     {
-        return std::string(stemmer_.stem(term));
+        std::string lower = to_lower_utf8(term);
+        return std::string(stemmer_.stem(lower));
     }
 } // namespace lse

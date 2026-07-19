@@ -1,11 +1,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include "index/index_writer.hpp"
 #include "index/index_reader.hpp"
+#include "search/search_engine.hpp"
+#include "search/query_builder.hpp"
 #include "tokenizer/tokenizer.hpp"
 #include "tokenizer/stemmer.hpp"
 #include <filesystem>
 #include <memory>
-#include <spdlog/spdlog.h>
+#include <algorithm>
 
 using namespace lse;
 namespace fs = std::filesystem;
@@ -52,15 +54,11 @@ TEST_CASE("IndexWriter/IndexReader: write and read single document", "[persisten
         REQUIRE(reader.open(index_dir).has_value());
         CHECK(reader.docCount() == 1);
 
-        Stemmer query_stemmer(StemmerLanguage::Russian);
-        auto query_tokens = tokenize_and_stem("рима", query_stemmer);
-        std::vector<std::string> query_terms;
-        for (const auto &t : query_tokens)
-        {
-            query_terms.push_back(t.text);
-        }
+        SearchEngine engine(reader, stemmer);
+        auto query = QueryBuilder::queryString("рима");
+        REQUIRE(query.has_value());
 
-        auto results = reader.search(query_terms, 10);
+        auto results = engine.execute(*query, 10);
         REQUIRE(results.has_value());
         REQUIRE(results->size() == 1);
         CHECK(results->at(0)->title == "Тестовая книга");
@@ -101,12 +99,11 @@ TEST_CASE("IndexWriter/IndexReader: multiple documents", "[persistence]")
         REQUIRE(reader.open(index_dir).has_value());
         CHECK(reader.docCount() == 2);
 
-        auto query_tokens = tokenize_and_stem("история", stemmer);
-        std::vector<std::string> query_terms;
-        for (const auto &t : query_tokens)
-            query_terms.push_back(t.text);
+        SearchEngine engine(reader, stemmer);
+        auto query = QueryBuilder::queryString("история");
+        REQUIRE(query.has_value());
 
-        auto results = reader.search(query_terms, 10);
+        auto results = engine.execute(*query, 10);
         REQUIRE(results.has_value());
         REQUIRE(results->size() == 1);
         CHECK(results->at(0)->title == "Книга 2");
@@ -144,12 +141,11 @@ TEST_CASE("IndexWriter/IndexReader: persistence survives reopen", "[persistence]
         reader.open(index_dir);
         CHECK(reader.docCount() == 2);
 
-        auto query_tokens = tokenize_and_stem("документ", stemmer);
-        std::vector<std::string> query_terms;
-        for (const auto &t : query_tokens)
-            query_terms.push_back(t.text);
+        SearchEngine engine(reader, stemmer);
+        auto query = QueryBuilder::queryString("документ");
+        REQUIRE(query.has_value());
 
-        auto results = reader.search(query_terms, 10);
+        auto results = engine.execute(*query, 10);
         REQUIRE(results.has_value());
         CHECK(results->size() == 2);
     }
@@ -173,8 +169,12 @@ TEST_CASE("IndexWriter/IndexReader: empty index", "[persistence]")
         REQUIRE(reader.open(index_dir).has_value());
         CHECK(reader.docCount() == 0);
 
-        std::vector<std::string> query = {"тест"};
-        auto results = reader.search(query, 10);
+        Stemmer stemmer(StemmerLanguage::Russian);
+        SearchEngine engine(reader, stemmer);
+        auto query = QueryBuilder::queryString("тест");
+        REQUIRE(query.has_value());
+
+        auto results = engine.execute(*query, 10);
         REQUIRE(results.has_value());
         CHECK(results->empty());
     }
@@ -206,21 +206,20 @@ TEST_CASE("IndexWriter/IndexReader: filter by genre", "[persistence]")
     {
         IndexReader reader;
         reader.open(index_dir);
+        SearchEngine engine(reader, stemmer);
 
-        auto query_tokens = tokenize_and_stem("древний", stemmer);
-        std::vector<std::string> query_terms;
-        for (const auto &t : query_tokens)
-            query_terms.push_back(t.text);
+        auto query = QueryBuilder::queryString("древний");
+        REQUIRE(query.has_value());
 
-        auto results = reader.search(query_terms, 10);
+        auto results = engine.execute(*query, 10);
         REQUIRE(results.has_value());
         CHECK(results->size() == 1);
 
-        auto results_hist = reader.search(query_terms, 10, "История");
+        auto results_hist = engine.execute(*query, 10, "История");
         REQUIRE(results_hist.has_value());
         CHECK(results_hist->size() == 1);
 
-        auto results_sci = reader.search(query_terms, 10, "Наука");
+        auto results_sci = engine.execute(*query, 10, "Наука");
         REQUIRE(results_sci.has_value());
         CHECK(results_sci->empty());
     }
@@ -247,29 +246,24 @@ TEST_CASE("IndexReader: search with highlight terms", "[persistence]")
     {
         IndexReader reader;
         reader.open(index_dir);
+        SearchEngine engine(reader, stemmer);
 
-        // Поисковые термы (стеммированные)
-        auto query_tokens = tokenize_and_stem("рима", stemmer);
-        std::vector<std::string> query_terms;
-        for (const auto &t : query_tokens)
-            query_terms.push_back(t.text);
+        auto query = QueryBuilder::queryString("рима");
+        REQUIRE(query.has_value());
 
-        // Оригинальные термы для подсветки
         std::vector<std::string> highlight_terms = {"рима"};
 
-        auto results = reader.search(query_terms, 10, "", "", "", highlight_terms);
+        auto results = engine.execute(*query, 10, "", "", "", highlight_terms);
         REQUIRE(results.has_value());
         REQUIRE(results->size() == 1);
 
         auto &hit = results->at(0);
         CHECK(hit->highlights.size() > 0);
 
-        // Проверяем, что подсветка указывает на слово "рима" в content
         bool found = false;
         for (const auto &hl : hit->highlights)
         {
             std::string highlighted = hit->content.substr(hl.offset, hl.length);
-            // Приводим к нижнему регистру для сравнения
             std::transform(highlighted.begin(), highlighted.end(), highlighted.begin(), ::tolower);
             if (highlighted == "рима")
             {

@@ -90,15 +90,6 @@ namespace lse
         auto open(const std::filesystem::path &index_dir) -> std::expected<void, IndexError>;
         void close();
 
-        // Поиск. Возвращает unique_ptr для избежания проблем с перемещением строк.
-        auto search(const std::vector<std::string> &query_terms,
-                    size_t top_k = 20,
-                    const std::string &genre_filter = "",
-                    const std::string &author_filter = "",
-                    const std::string &title_filter = "",
-                    const std::vector<std::string> &highlight_terms = {})
-            -> std::expected<std::vector<std::unique_ptr<SearchHit>>, IndexError>;
-
         // Получить постинг-лист для терма
         auto getTermPostings(const std::string &term) const
             -> std::expected<std::vector<TermPostings>, IndexError>;

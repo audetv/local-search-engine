@@ -82,7 +82,7 @@
 | 3.3 | QueryNode + QueryParser + группировка | ✅ |
 | 3.4 | `SearchEngine` — выполнение QueryNode над индексом | 	✅ |
 | 3.5 | `QueryBuilder` | ✅ |
-| 3.6 | Интеграция в main.cpp | Критично |
+| 3.6 | Интеграция в main.cpp | ✅ |
 | 3.7 | Маппинг жанров | Средне |
 
 ---

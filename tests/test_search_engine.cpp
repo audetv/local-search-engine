@@ -2,7 +2,7 @@
 #include "index/index_writer.hpp"
 #include "index/index_reader.hpp"
 #include "search/search_engine.hpp"
-#include "search/query_parser.hpp"
+#include "search/query_builder.hpp"
 #include "tokenizer/tokenizer.hpp"
 #include "tokenizer/stemmer.hpp"
 #include <filesystem>
@@ -25,7 +25,6 @@ static auto tokenize_and_stem(const std::string &text, Stemmer &stemmer) -> std:
     return stemmed;
 }
 
-// Вспомогательная функция: создать индекс с документами
 struct TestIndex
 {
     fs::path dir;
@@ -54,8 +53,7 @@ TEST_CASE("SearchEngine: single term", "[search_engine]")
     reader.open(ti.dir);
     SearchEngine engine(reader, stemmer);
 
-    QueryParser parser;
-    auto query = parser.parse("рима");
+    auto query = QueryBuilder::queryString("рима");
     REQUIRE(query.has_value());
 
     auto results = engine.execute(*query);
@@ -87,9 +85,7 @@ TEST_CASE("SearchEngine: AND two terms", "[search_engine]")
     reader.open(ti.dir);
     SearchEngine engine(reader, stemmer);
 
-    QueryParser parser;
-    // "история рима" → AND (должен найти только книгу 1)
-    auto query = parser.parse("история рима");
+    auto query = QueryBuilder::queryString("история рима");
     REQUIRE(query.has_value());
 
     auto results = engine.execute(*query);
@@ -121,8 +117,7 @@ TEST_CASE("SearchEngine: OR operator", "[search_engine]")
     reader.open(ti.dir);
     SearchEngine engine(reader, stemmer);
 
-    QueryParser parser;
-    auto query = parser.parse("рим | греция");
+    auto query = QueryBuilder::queryString("рим | греция");
     REQUIRE(query.has_value());
 
     auto results = engine.execute(*query);
@@ -153,8 +148,7 @@ TEST_CASE("SearchEngine: NOT operator", "[search_engine]")
     reader.open(ti.dir);
     SearchEngine engine(reader, stemmer);
 
-    QueryParser parser;
-    auto query = parser.parse("история -рима");
+    auto query = QueryBuilder::queryString("история -рима");
     REQUIRE(query.has_value());
 
     auto results = engine.execute(*query);
@@ -186,14 +180,12 @@ TEST_CASE("SearchEngine: phrase", "[search_engine]")
     reader.open(ti.dir);
     SearchEngine engine(reader, stemmer);
 
-    QueryParser parser;
-    // "древнего рима" — фраза
-    auto query = parser.parse("\"древнего рима\"");
+    auto query = QueryBuilder::matchPhrase("древнего рима");
     REQUIRE(query.has_value());
 
     auto results = engine.execute(*query);
     REQUIRE(results.has_value());
-    REQUIRE(results->size() == 2); // обе книги содержат фразу
+    REQUIRE(results->size() == 2);
 }
 
 TEST_CASE("SearchEngine: grouping with parentheses", "[search_engine]")
@@ -223,12 +215,37 @@ TEST_CASE("SearchEngine: grouping with parentheses", "[search_engine]")
     reader.open(ti.dir);
     SearchEngine engine(reader, stemmer);
 
-    QueryParser parser;
-    // (кофе | чай) круассан — должен найти книги 1 и 2, но не 3
-    auto query = parser.parse("(кофе | чай) круассан");
+    auto query = QueryBuilder::queryString("(кофе | чай) круассан");
     REQUIRE(query.has_value());
 
     auto results = engine.execute(*query);
     REQUIRE(results.has_value());
     REQUIRE(results->size() == 2);
+}
+
+TEST_CASE("SearchEngine: case insensitive", "[search_engine]")
+{
+    TestIndex ti;
+    Stemmer stemmer(StemmerLanguage::Russian);
+
+    {
+        IndexWriter writer;
+        writer.open(ti.dir);
+        writer.upsertBook(1, "Книга", "Автор", "Жанр", "ru", "/tmp/book.fb2");
+        auto tokens = tokenize_and_stem("абаза", stemmer);
+        writer.addDocument(1, 1, tokens, "абаза");
+        writer.close();
+    }
+
+    IndexReader reader;
+    reader.open(ti.dir);
+    SearchEngine engine(reader, stemmer);
+
+    auto query = QueryBuilder::queryString("Абаза");
+    REQUIRE(query.has_value());
+
+    auto results = engine.execute(*query, 10);
+    REQUIRE(results.has_value());
+    REQUIRE(results->size() == 1);
+    CHECK(results->at(0)->title == "Книга");
 }
