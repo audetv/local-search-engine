@@ -5,7 +5,10 @@
 #include "core/tokenizer/stemmer.hpp"
 #include "core/index/index_writer.hpp"
 #include "core/index/index_reader.hpp"
+#include "core/search/search_engine.hpp"
+#include "core/search/query_builder.hpp"
 #include "core/book_indexer.hpp"
+#include "core/parser/genre_mapper.hpp"
 
 using namespace lse;
 using namespace std::chrono;
@@ -18,22 +21,27 @@ int main(int argc, char *argv[])
     std::cout << "  Local Search Engine - Console Prototype\n";
     std::cout << "========================================\n\n";
 
-    // Путь к индексу
     std::string index_path = "./user_index";
-    if (argc == 4 && std::string(argv[1]) == "index")
-    {
-        index_path = argv[3];
-    }
 
     Stemmer stemmer(StemmerLanguage::Russian);
-    TokenizerOptions tokenizer_opts;
-    tokenizer_opts.normalize_yo = true;
-    tokenizer_opts.keep_digits = true;
+
+    // Парсим --genres
+    std::string genres_path = "genres_map.csv";
+    for (int i = 1; i < argc; ++i)
+    {
+        if (std::string(argv[i]) == "--genres" && i + 1 < argc)
+        {
+            genres_path = argv[++i];
+        }
+    }
 
     // Режим 1: индексация
     if (argc >= 3 && std::string(argv[1]) == "index")
     {
         std::string path = argv[2];
+        if (argc >= 4)
+            index_path = argv[3];
+
         std::cout << "Indexing directory: " << path << std::endl;
         std::cout << "Index path: " << index_path << std::endl;
 
@@ -45,7 +53,9 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        BookIndexer book_indexer(writer, stemmer);
+        GenreMapper genre_mapper;
+        genre_mapper.load(genres_path);
+        BookIndexer book_indexer(writer, stemmer, genre_mapper);
 
         auto start = high_resolution_clock::now();
         auto result = book_indexer.indexDirectory(path);
@@ -76,9 +86,12 @@ int main(int argc, char *argv[])
         std::cout << "No index found at " << index_path << ". Use 'index <path>' first.\n";
     }
 
+    SearchEngine engine(reader, stemmer);
+
     std::cout << "Commands:\n";
     std::cout << "  index <path> [index_dir]  - index directory\n";
-    std::cout << "  <query>                   - search (type 'quit' to exit)\n\n";
+    std::cout << "  <query>                   - search (type 'quit' to exit)\n";
+    std::cout << "  Use | for OR, - for NOT, \"...\" for phrase, (...) for grouping\n\n";
 
     std::string line;
     while (true)
@@ -94,7 +107,6 @@ int main(int argc, char *argv[])
         // Команда index
         if (line.starts_with("index "))
         {
-            // Разбираем: index <path> [index_dir]
             std::string args = line.substr(6);
             size_t space = args.find(' ');
             std::string dir_path = args;
@@ -115,7 +127,10 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            BookIndexer book_indexer(writer, stemmer);
+            GenreMapper genre_mapper;
+            genre_mapper.load(genres_path);
+            BookIndexer book_indexer(writer, stemmer, genre_mapper);
+
             auto result = book_indexer.indexDirectory(dir_path);
             if (result.has_value())
             {
@@ -123,7 +138,6 @@ int main(int argc, char *argv[])
             }
             writer.close();
 
-            // Переоткрываем reader
             reader.open(idx_path);
             continue;
         }
@@ -135,22 +149,28 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        Tokenizer tokenizer(line, tokenizer_opts);
-        auto tokenize_result = tokenizer.tokenize();
-        if (!tokenize_result.has_value())
+        // Парсим запрос
+        auto query = QueryBuilder::queryString(line);
+        if (!query.has_value())
         {
             std::cout << "Invalid query\n";
             continue;
         }
 
-        std::vector<std::string> query_terms;
-        for (auto &token : *tokenize_result)
+        // Оригинальные термы для подсветки
+        Tokenizer tokenizer(line);
+        auto tokenize_result = tokenizer.tokenize();
+        std::vector<std::string> highlight_terms;
+        if (tokenize_result.has_value())
         {
-            query_terms.push_back(std::string(stemmer.stem(token.text)));
+            for (const auto &t : *tokenize_result)
+            {
+                highlight_terms.push_back(t.text);
+            }
         }
 
         auto start = high_resolution_clock::now();
-        auto search_result = reader.search(query_terms, 10);
+        auto search_result = engine.execute(*query, 10, "", "", "", highlight_terms);
         auto end = high_resolution_clock::now();
 
         if (!search_result.has_value())
@@ -169,7 +189,8 @@ int main(int argc, char *argv[])
         {
             std::cout << "  doc_id=" << hit->doc_id
                       << " score=" << hit->bm25_score
-                      << " title=" << hit->title << "\n";
+                      << " title=" << hit->title
+                      << " author=" << hit->author << "\n";
         }
         std::cout << std::endl;
     }

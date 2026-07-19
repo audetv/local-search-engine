@@ -84,6 +84,8 @@ namespace lse
         result.file_path = file_path.filename().string();
         result.encoding = "UTF-8";
         result.file_size = std::filesystem::file_size(file_path);
+        result.author = "";
+        result.genre = "";
 
         // Читаем документ
         auto doc_xml = readZipFile(uf.get(), "word/document.xml");

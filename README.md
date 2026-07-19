@@ -29,6 +29,9 @@ ctest --preset=debug
 # Запуск приложения
 ./build/debug/src/local-search-engine
 
+# Создание индекса с маппингом жанров
+./build/debug/src/local-search-engine index test_books ./user_index --genres ./config/genres_map.csv
+
 # Запуск тестов
 ctest --preset=debug
 ```

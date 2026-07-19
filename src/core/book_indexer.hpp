@@ -1,5 +1,6 @@
 #pragma once
 
+#include "parser/genre_mapper.hpp"
 #include "index/index_writer.hpp"
 #include "index/index_reader.hpp"
 #include "tokenizer/stemmer.hpp"
@@ -23,7 +24,7 @@ namespace lse
     class BookIndexer
     {
     public:
-        BookIndexer(IndexWriter &writer, Stemmer &stemmer);
+        BookIndexer(IndexWriter &writer, Stemmer &stemmer, GenreMapper &genre_mapper);
 
         auto indexFile(const std::filesystem::path &file_path)
             -> std::expected<std::vector<BookInfo>, IndexError>;
@@ -37,6 +38,7 @@ namespace lse
     private:
         IndexWriter &writer_;
         Stemmer &stemmer_;
+        GenreMapper &genre_mapper_;
         TokenizerOptions tokenizer_opts_;
         ChunkerConfig chunker_config_;
 

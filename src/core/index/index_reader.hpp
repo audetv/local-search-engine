@@ -18,6 +18,19 @@ struct sqlite3_stmt;
 namespace lse
 {
 
+    struct TermPostings
+    {
+        uint64_t doc_id;
+        uint32_t term_freq;
+        std::vector<uint32_t> positions;
+    };
+
+    struct Highlight
+    {
+        size_t offset; // позиция в content (в байтах UTF-8)
+        size_t length; // длина подсвечиваемого фрагмента (в байтах UTF-8)
+    };
+
     struct SearchHit
     {
         uint64_t doc_id;
@@ -26,13 +39,18 @@ namespace lse
         std::string author;
         std::string genre;
         std::string content;
+        std::vector<Highlight> highlights;
         int64_t book_id;
         uint32_t chunk_num;
 
         SearchHit() = default;
 
         SearchHit(SearchHit &&other) noexcept
-            : doc_id(other.doc_id), bm25_score(other.bm25_score), title(std::move(other.title)), author(std::move(other.author)), genre(std::move(other.genre)), content(std::move(other.content)), book_id(other.book_id), chunk_num(other.chunk_num)
+            : doc_id(other.doc_id), bm25_score(other.bm25_score),
+              title(std::move(other.title)), author(std::move(other.author)),
+              genre(std::move(other.genre)), content(std::move(other.content)),
+              highlights(std::move(other.highlights)), book_id(other.book_id),
+              chunk_num(other.chunk_num)
         {
         }
 
@@ -46,6 +64,7 @@ namespace lse
                 author = std::move(other.author);
                 genre = std::move(other.genre);
                 content = std::move(other.content);
+                highlights = std::move(other.highlights);
                 book_id = other.book_id;
                 chunk_num = other.chunk_num;
             }
@@ -71,19 +90,23 @@ namespace lse
         auto open(const std::filesystem::path &index_dir) -> std::expected<void, IndexError>;
         void close();
 
-        // Поиск. Возвращает unique_ptr для избежания проблем с перемещением строк.
-        auto search(const std::vector<std::string> &query_terms,
-                    size_t top_k = 20,
-                    const std::string &genre_filter = "",
-                    const std::string &author_filter = "")
-            -> std::expected<std::vector<std::unique_ptr<SearchHit>>, IndexError>;
+        // Получить постинг-лист для терма
+        auto getTermPostings(const std::string &term) const
+            -> std::expected<std::vector<TermPostings>, IndexError>;
+
+        // Получить IDF для терма
+        auto getTermIDF(const std::string &term) const -> double;
+
+        // BM25 (делаем публичным для SearchEngine)
+        double calculateBM25(uint32_t tf, uint32_t doc_length, double idf) const;
 
         // Статистика
         uint64_t docCount() const { return doc_count_; }
         double avgDocLength() const { return avg_doc_length_; }
 
         // Получить метаданные чанка по doc_id
-        auto getChunkMetadata(uint64_t doc_id) -> std::expected<SearchHit, IndexError>;
+        auto getChunkMetadata(uint64_t doc_id)
+            -> std::expected<std::unique_ptr<SearchHit>, IndexError>;
 
     private:
         std::filesystem::path index_dir_;
@@ -115,7 +138,6 @@ namespace lse
         auto decodePostings(const std::vector<PostingBlockInfo> &blocks) const
             -> std::vector<std::pair<uint64_t, std::pair<uint32_t, std::vector<uint32_t>>>>;
 
-        double calculateBM25(uint32_t tf, uint32_t doc_length, double idf) const;
         double calculateIDF(uint32_t df) const;
 
         auto prepareStatements() -> std::expected<void, IndexError>;

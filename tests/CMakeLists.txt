@@ -11,6 +11,11 @@ add_executable(lse_tests
     test_chunker.cpp
     test_memory_mapped_file.cpp
     test_index_persistence.cpp
+    test_filename_parser.cpp
+    test_query_parser.cpp
+    test_search_engine.cpp
+    test_query_builder.cpp
+    test_genre_mapper.cpp
 )
 
 target_link_libraries(lse_tests PRIVATE

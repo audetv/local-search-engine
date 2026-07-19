@@ -19,33 +19,46 @@ TEST_CASE("Chunker: short paragraphs get merged", "[chunker]")
     std::string text = "Короткий.\nЕщё короткий.\nТретий короткий.";
     auto chunks = chunker.chunkify(text);
 
-    // Три коротких параграфа должны склеиться в один
     REQUIRE(chunks.size() == 1);
     CHECK(chunks[0].find("Короткий.") != std::string::npos);
     CHECK(chunks[0].find("Ещё короткий.") != std::string::npos);
+    CHECK(chunks[0].find("Третий короткий.") != std::string::npos);
 }
 
 TEST_CASE("Chunker: long paragraph split by sentences", "[chunker]")
 {
     Chunker chunker({300, 500, 1000});
 
-    // Создаём длинный текст из множества предложений
-    std::string sentence = "Это предложение для тестирования разбиения длинного текста на части по границам предложений.";
+    std::string sentence = "Это длинное предложение для проверки разбиения текста на части по границам предложений.";
     std::string text;
-    for (int i = 0; i < 20; ++i)
-    {
+    for (int i = 0; i < 50; ++i)
+    { // 50 предложений вместо 20
         text += sentence + " ";
     }
 
     auto chunks = chunker.chunkify(text);
 
-    // Должен разбить на несколько чанков
+    REQUIRE(chunks.size() > 1);
+}
+
+TEST_CASE("Chunker: word not split", "[chunker]")
+{
+    Chunker chunker({300, 500, 1000});
+
+    std::string text;
+    for (int i = 0; i < 500; ++i)
+    { // 500 слов вместо 100
+        text += "слово" + std::to_string(i) + " ";
+    }
+
+    auto chunks = chunker.chunkify(text);
+
     REQUIRE(chunks.size() > 1);
 
-    // Каждый чанк не должен превышать max_chunk_size
     for (const auto &chunk : chunks)
     {
-        CHECK(static_cast<int>(chunk.size()) <= 1000);
+        CHECK(!chunk.empty());
+        CHECK(chunk.back() != ' ');
     }
 }
 

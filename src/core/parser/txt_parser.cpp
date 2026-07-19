@@ -65,6 +65,8 @@ namespace lse
         doc.title = file_name;
         doc.file_path = file_name;
         doc.file_size = data.size();
+        doc.author = "";
+        doc.genre = "";
 
         // Убираем BOM если есть
         if (doc.content.starts_with("\xEF\xBB\xBF"))

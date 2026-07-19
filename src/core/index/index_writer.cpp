@@ -60,7 +60,7 @@ namespace lse
             doc_count_ = 0;
             total_term_count_ = 0;
             avg_doc_length_ = 0.0;
-            last_doc_id_ = 0;
+            last_doc_id_ = 1;
         }
 
         // Открываем postings (всегда ReadWrite)
@@ -93,7 +93,7 @@ namespace lse
         if (last_doc_id_ == 0)
         {
             sqlite3_stmt *stmt;
-            if (sqlite3_prepare_v2(db_, "SELECT COALESCE(MAX(doc_id), -1) + 1 FROM chunks", -1, &stmt, nullptr) == SQLITE_OK)
+            if (sqlite3_prepare_v2(db_, "SELECT COALESCE(MAX(doc_id), 0) + 1 FROM chunks", -1, &stmt, nullptr) == SQLITE_OK)
             {
                 if (sqlite3_step(stmt) == SQLITE_ROW)
                 {
@@ -218,6 +218,19 @@ namespace lse
         return {};
     }
 
+    static size_t utf8_length(std::string_view text)
+    {
+        size_t len = 0;
+        for (size_t i = 0; i < text.size(); ++i)
+        {
+            if ((static_cast<unsigned char>(text[i]) & 0xC0) != 0x80)
+            {
+                len++;
+            }
+        }
+        return len;
+    }
+
     auto IndexWriter::addDocument(int64_t book_id, uint32_t chunk_num,
                                   const std::vector<Token> &tokens,
                                   const std::string &content)
@@ -246,7 +259,7 @@ namespace lse
         sqlite3_bind_int64(stmt, 2, book_id);
         sqlite3_bind_int(stmt, 3, chunk_num);
         sqlite3_bind_int(stmt, 4, static_cast<int>(tokens.size()));
-        sqlite3_bind_int(stmt, 5, static_cast<int>(content.size()));
+        sqlite3_bind_int(stmt, 5, static_cast<int>(utf8_length(content)));
         sqlite3_bind_text(stmt, 6, content.c_str(), -1, SQLITE_TRANSIENT);
 
         int rc = sqlite3_step(stmt);
@@ -534,6 +547,30 @@ namespace lse
         }
 
         return result;
+    }
+
+    bool IndexWriter::hasChunks(int64_t book_id) const
+    {
+        if (!db_)
+            return false;
+
+        sqlite3_stmt *stmt;
+        const char *sql = "SELECT COUNT(*) FROM chunks WHERE book_id = ?";
+        if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        {
+            return false;
+        }
+
+        sqlite3_bind_int64(stmt, 1, book_id);
+
+        bool has = false;
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            has = sqlite3_column_int(stmt, 0) > 0;
+        }
+
+        sqlite3_finalize(stmt);
+        return has;
     }
 
 } // namespace lse

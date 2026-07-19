@@ -34,6 +34,8 @@ Thumbs.db
 
 # Application data
 user_index/
+user_index_data/
+user_index_old/
 *.db
 *.log
 

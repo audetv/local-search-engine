@@ -18,7 +18,12 @@ add_library(lse_core STATIC
     parser/txt_parser.cpp
     parser/fb2_parser.cpp
     parser/docx_parser.cpp
+    parser/filename_parser.cpp
+    parser/genre_mapper.cpp
     chunker/chunker.cpp
+    search/query_parser.cpp
+    search/query_builder.cpp
+    search/search_engine.cpp
     book_indexer.cpp
     ${STEMMER_C_FILES}
 )

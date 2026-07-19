@@ -2,6 +2,7 @@
 #include "parser/txt_parser.hpp"
 #include "parser/fb2_parser.hpp"
 #include "parser/docx_parser.hpp"
+#include "parser/filename_parser.hpp"
 #include "chunker/chunker.hpp"
 #include "tokenizer/tokenizer.hpp"
 #include <spdlog/spdlog.h>
@@ -47,8 +48,8 @@ namespace lse
         return result;
     }
 
-    BookIndexer::BookIndexer(IndexWriter &writer, Stemmer &stemmer)
-        : writer_(writer), stemmer_(stemmer)
+    BookIndexer::BookIndexer(IndexWriter &writer, Stemmer &stemmer, GenreMapper &genre_mapper)
+        : writer_(writer), stemmer_(stemmer), genre_mapper_(genre_mapper)
     {
         tokenizer_opts_.normalize_yo = true;
         tokenizer_opts_.keep_digits = true;
@@ -77,7 +78,6 @@ namespace lse
     auto BookIndexer::indexFile(const std::filesystem::path &file_path)
         -> std::expected<std::vector<BookInfo>, IndexError>
     {
-
         auto ext = file_path.extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
@@ -113,13 +113,46 @@ namespace lse
         }
 
         auto &doc = *parse_result;
-        spdlog::info("Indexing: {}", doc.title);
 
-        // Вычисляем book_id
-        int64_t book_id = generateBookId(file_path.string(), doc.title, "");
+        // Для TXT и DOCX — парсим метаданные из имени файла
+        if (ext == ".txt" || ext == ".docx")
+        {
+            auto meta = parseFilenameMetadata(file_path.filename().string());
+            if (!meta.title.empty() && doc.title == file_path.filename().string())
+            {
+                doc.title = meta.title;
+            }
+            if (!meta.author.empty() && doc.author.empty())
+            {
+                doc.author = meta.author;
+            }
+            if (!meta.genre.empty() && doc.genre.empty())
+            {
+                doc.genre = meta.genre;
+            }
+        }
+
+        // Применяем маппинг жанров
+        if (!genre_mapper_.empty())
+        {
+            doc.genre = genre_mapper_.map(doc.genre);
+        }
+
+        spdlog::info("Indexing: {} (author={}, genre={})", doc.title, doc.author, doc.genre);
+
+        // Вычисляем book_id (используем название и автора для детерминированного ID)
+        int64_t book_id = generateBookId(file_path.string(), doc.title, doc.author);
+
+        // Проверяем, проиндексирована ли уже эта книга
+        if (writer_.hasChunks(book_id))
+        {
+            spdlog::info("Skipping (already indexed): {}", doc.title);
+            indexed_files_++;
+            return std::vector<BookInfo>{};
+        }
 
         // Upsert книги
-        auto upsert_result = writer_.upsertBook(book_id, doc.title, "", "", "ru", file_path.string());
+        auto upsert_result = writer_.upsertBook(book_id, doc.title, doc.author, doc.genre, "ru", file_path.string());
         if (!upsert_result.has_value())
         {
             spdlog::error("Failed to upsert book: {}", doc.title);

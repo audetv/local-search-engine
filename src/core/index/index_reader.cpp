@@ -146,12 +146,11 @@ namespace lse
     {
         std::vector<std::pair<uint64_t, std::pair<uint32_t, std::vector<uint32_t>>>> result;
 
-        uint64_t prev_doc_id = 0;
-
         for (const auto &block : blocks)
         {
             const uint8_t *data = postings_file_.data() + block.offset;
             size_t pos = 0;
+            uint64_t prev_doc_id = 0; // ← сбрасываем для каждого блока
 
             uint32_t doc_count = static_cast<uint32_t>(decode_varint(data, pos));
 
@@ -179,107 +178,10 @@ namespace lse
         return result;
     }
 
-    auto IndexReader::search(const std::vector<std::string> &query_terms,
-                             size_t top_k,
-                             const std::string &genre_filter,
-                             const std::string &author_filter)
-        -> std::expected<std::vector<std::unique_ptr<SearchHit>>, IndexError>
+    auto IndexReader::getChunkMetadata(uint64_t doc_id)
+        -> std::expected<std::unique_ptr<SearchHit>, IndexError>
     {
 
-        if (!is_open_)
-            return std::unexpected(IndexError::NotOpen);
-        if (query_terms.empty())
-            return std::unexpected(IndexError::EmptyQuery);
-
-        std::unordered_map<uint64_t, float> doc_scores;
-
-        for (const auto &term : query_terms)
-        {
-            auto lex_result = findTerm(term);
-            if (!lex_result.found)
-                continue;
-
-            double idf = calculateIDF(lex_result.df);
-            auto postings = decodePostings(lex_result.blocks);
-
-            for (const auto &[doc_id, info] : postings)
-            {
-                const auto &[tf, positions] = info;
-                doc_scores[doc_id] += static_cast<float>(calculateBM25(tf, static_cast<uint32_t>(positions.size()), idf));
-            }
-        }
-
-        if (doc_scores.empty())
-        {
-            return std::vector<std::unique_ptr<SearchHit>>{};
-        }
-
-        std::vector<std::pair<uint64_t, float>> scored_docs(doc_scores.begin(), doc_scores.end());
-        std::sort(scored_docs.begin(), scored_docs.end(),
-                  [](const auto &a, const auto &b)
-                  { return a.second > b.second; });
-
-        if (scored_docs.size() > top_k)
-        {
-            scored_docs.resize(top_k);
-        }
-
-        std::vector<std::unique_ptr<SearchHit>> results;
-        results.reserve(scored_docs.size());
-
-        const char *sql_batch = R"(
-        SELECT c.doc_id, c.book_id, c.chunk_num, b.title, b.author, b.genre, c.content
-        FROM chunks c
-        JOIN books b ON c.book_id = b.id
-        WHERE c.doc_id = ?
-    )";
-
-        sqlite3_stmt *stmt = nullptr;
-        sqlite3_prepare_v2(db_, sql_batch, -1, &stmt, nullptr);
-
-        for (const auto &[doc_id, score] : scored_docs)
-        {
-            sqlite3_reset(stmt);
-            sqlite3_bind_int64(stmt, 1, static_cast<sqlite3_int64>(doc_id));
-
-            if (sqlite3_step(stmt) == SQLITE_ROW)
-            {
-                auto hit = std::make_unique<SearchHit>();
-                hit->doc_id = doc_id;
-                hit->bm25_score = score;
-                hit->book_id = sqlite3_column_int64(stmt, 1);
-                hit->chunk_num = static_cast<uint32_t>(sqlite3_column_int(stmt, 2));
-
-                const char *title = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
-                const char *author = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4));
-                const char *genre = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5));
-                const char *content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 6));
-
-                if (title)
-                    hit->title = title;
-                if (author)
-                    hit->author = author;
-                if (genre)
-                    hit->genre = genre;
-                if (content)
-                    hit->content = content;
-
-                if (!genre_filter.empty() && hit->genre != genre_filter)
-                    continue;
-                if (!author_filter.empty() && hit->author != author_filter)
-                    continue;
-
-                results.push_back(std::move(hit));
-            }
-        }
-
-        sqlite3_finalize(stmt);
-
-        return results;
-    }
-
-    auto IndexReader::getChunkMetadata(uint64_t doc_id) -> std::expected<SearchHit, IndexError>
-    {
         const char *sql = R"(
         SELECT c.book_id, c.chunk_num, b.title, b.author, b.genre, c.content
         FROM chunks c
@@ -296,14 +198,15 @@ namespace lse
 
         sqlite3_bind_int64(stmt, 1, static_cast<sqlite3_int64>(doc_id));
 
-        std::expected<SearchHit, IndexError> result = std::unexpected(IndexError::CorruptedIndex);
+        std::expected<std::unique_ptr<SearchHit>, IndexError> result =
+            std::unexpected(IndexError::CorruptedIndex);
 
         if (sqlite3_step(stmt) == SQLITE_ROW)
         {
-            SearchHit hit;
-            hit.doc_id = doc_id;
-            hit.book_id = sqlite3_column_int64(stmt, 0);
-            hit.chunk_num = static_cast<uint32_t>(sqlite3_column_int(stmt, 1));
+            auto hit = std::make_unique<SearchHit>();
+            hit->doc_id = doc_id;
+            hit->book_id = sqlite3_column_int64(stmt, 0);
+            hit->chunk_num = static_cast<uint32_t>(sqlite3_column_int(stmt, 1));
 
             const char *title = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
             const char *author = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
@@ -311,13 +214,13 @@ namespace lse
             const char *content = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5));
 
             if (title)
-                hit.title = title;
+                hit->title = title;
             if (author)
-                hit.author = author;
+                hit->author = author;
             if (genre)
-                hit.genre = genre;
+                hit->genre = genre;
             if (content)
-                hit.content = content;
+                hit->content = content;
 
             result = std::move(hit);
         }
@@ -329,6 +232,36 @@ namespace lse
     auto IndexReader::prepareStatements() -> std::expected<void, IndexError>
     {
         return {};
+    }
+
+    auto IndexReader::getTermPostings(const std::string &term) const
+        -> std::expected<std::vector<TermPostings>, IndexError>
+    {
+
+        auto lex_result = findTerm(term);
+        if (!lex_result.found)
+        {
+            return std::vector<TermPostings>{};
+        }
+
+        auto postings = decodePostings(lex_result.blocks);
+        std::vector<TermPostings> result;
+        result.reserve(postings.size());
+
+        for (const auto &[doc_id, info] : postings)
+        {
+            result.push_back({doc_id, info.first, info.second});
+        }
+
+        return result;
+    }
+
+    auto IndexReader::getTermIDF(const std::string &term) const -> double
+    {
+        auto lex_result = findTerm(term);
+        if (!lex_result.found)
+            return 0.0;
+        return calculateIDF(lex_result.df);
     }
 
     double IndexReader::calculateBM25(uint32_t tf, uint32_t doc_length, double idf) const
