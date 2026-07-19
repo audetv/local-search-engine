@@ -375,6 +375,36 @@ namespace lse
         return {};
     }
 
+    auto IndexReader::getTermPostings(const std::string &term) const
+        -> std::expected<std::vector<TermPostings>, IndexError>
+    {
+
+        auto lex_result = findTerm(term);
+        if (!lex_result.found)
+        {
+            return std::vector<TermPostings>{};
+        }
+
+        auto postings = decodePostings(lex_result.blocks);
+        std::vector<TermPostings> result;
+        result.reserve(postings.size());
+
+        for (const auto &[doc_id, info] : postings)
+        {
+            result.push_back({doc_id, info.first, info.second});
+        }
+
+        return result;
+    }
+
+    auto IndexReader::getTermIDF(const std::string &term) const -> double
+    {
+        auto lex_result = findTerm(term);
+        if (!lex_result.found)
+            return 0.0;
+        return calculateIDF(lex_result.df);
+    }
+
     double IndexReader::calculateBM25(uint32_t tf, uint32_t doc_length, double idf) const
     {
         double numerator = tf * (k1 + 1.0);

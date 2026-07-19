@@ -18,6 +18,13 @@ struct sqlite3_stmt;
 namespace lse
 {
 
+    struct TermPostings
+    {
+        uint64_t doc_id;
+        uint32_t term_freq;
+        std::vector<uint32_t> positions;
+    };
+
     struct Highlight
     {
         size_t offset; // позиция в content (в байтах UTF-8)
@@ -88,6 +95,16 @@ namespace lse
                     const std::vector<std::string> &highlight_terms = {})
             -> std::expected<std::vector<std::unique_ptr<SearchHit>>, IndexError>;
 
+        // Получить постинг-лист для терма
+        auto getTermPostings(const std::string &term) const
+            -> std::expected<std::vector<TermPostings>, IndexError>;
+
+        // Получить IDF для терма
+        auto getTermIDF(const std::string &term) const -> double;
+
+        // BM25 (делаем публичным для SearchEngine)
+        double calculateBM25(uint32_t tf, uint32_t doc_length, double idf) const;
+
         // Статистика
         uint64_t docCount() const { return doc_count_; }
         double avgDocLength() const { return avg_doc_length_; }
@@ -125,7 +142,6 @@ namespace lse
         auto decodePostings(const std::vector<PostingBlockInfo> &blocks) const
             -> std::vector<std::pair<uint64_t, std::pair<uint32_t, std::vector<uint32_t>>>>;
 
-        double calculateBM25(uint32_t tf, uint32_t doc_length, double idf) const;
         double calculateIDF(uint32_t df) const;
 
         auto prepareStatements() -> std::expected<void, IndexError>;
