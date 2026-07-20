@@ -57,14 +57,20 @@ target_link_libraries(lse_core PUBLIC
 
 target_compile_features(lse_core PUBLIC cxx_std_23)
 
+# Санитайзеры для всех компиляторов
 if(ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-    target_compile_options(lse_core PRIVATE
-        -fsanitize=address,undefined
-        -fno-omit-frame-pointer
-    )
-    target_link_options(lse_core PRIVATE
-        -fsanitize=address,undefined
-    )
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(lse_core PRIVATE
+            -fsanitize=address,undefined
+            -fno-omit-frame-pointer
+        )
+        target_link_options(lse_core PRIVATE
+            -fsanitize=address,undefined
+        )
+    elseif(MSVC)
+        target_compile_options(lse_core PRIVATE /fsanitize=address)
+        target_link_options(lse_core PRIVATE /fsanitize=address)
+    endif()
 endif()
 
 if(MSVC)

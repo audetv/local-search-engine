@@ -13,6 +13,7 @@
         "catch2",
         "minizip",
         "xxhash",
+        "openssl",
         {
             "name": "qtbase",
             "features": [
