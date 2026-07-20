@@ -2,6 +2,7 @@
     "name": "local-search-engine",
     "version": "1.0.0",
     "description": "Local full-text search engine for Russian books",
+    "builtin-baseline": "0878b5224d",
     "dependencies": [
         "spdlog",
         "sqlite3",
