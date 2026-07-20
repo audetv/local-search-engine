@@ -15,11 +15,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Export compile commands for tools
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Options
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
 option(BUILD_TESTS "Build unit tests" ON)
 option(ENABLE_SANITIZERS "Enable address/undefined sanitizers" OFF)
+option(BUILD_GUI "Build Qt GUI" ON)
 
-# Find packages (using actual vcpkg target names)
+# Core dependencies
 find_package(spdlog CONFIG REQUIRED)
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
 find_package(pugixml CONFIG REQUIRED)
@@ -30,7 +34,11 @@ find_package(minizip CONFIG REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 
-# libstemmer (Snowball stemmer) via FetchContent
+# Qt6
+if(BUILD_GUI)
+    find_package(Qt6 REQUIRED COMPONENTS Widgets)
+endif()
+
 include(FetchContent)
 FetchContent_Declare(
     libstemmer
@@ -65,6 +73,18 @@ endif()
 set_target_properties(local-search-engine PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/src"
 )
+
+# GUI executable
+if(BUILD_GUI)
+    add_subdirectory(src/ui)
+else()
+    # Console executable
+    add_executable(local-search-engine src/main.cpp)
+    target_link_libraries(local-search-engine PRIVATE lse_core)
+    set_target_properties(local-search-engine PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/src"
+    )
+endif()
 
 # Tests
 if(BUILD_TESTS)

@@ -2,7 +2,6 @@
     "name": "local-search-engine",
     "version": "1.0.0",
     "description": "Local full-text search engine for Russian books",
-    "builtin-baseline": "6c4c85578e047780802fa2df73208a51ad6ddff6",
     "dependencies": [
         "spdlog",
         "sqlite3",
@@ -13,6 +12,13 @@
         "uchardet",
         "catch2",
         "minizip",
-        "xxhash"
+        "xxhash",
+        {
+            "name": "qtbase",
+            "features": [
+                "widgets",
+                "gui"
+            ]
+        }
     ]
 }

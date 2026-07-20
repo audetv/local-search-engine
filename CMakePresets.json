@@ -16,7 +16,8 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "ENABLE_SANITIZERS": "ON",
-                "BUILD_TESTS": "ON"
+                "BUILD_TESTS": "ON",
+                "BUILD_GUI": "ON"
             }
         },
         {
@@ -26,7 +27,8 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
                 "ENABLE_SANITIZERS": "OFF",
-                "BUILD_TESTS": "OFF"
+                "BUILD_TESTS": "OFF",
+                "BUILD_GUI": "ON"
             }
         },
         {
