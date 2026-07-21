@@ -18,9 +18,12 @@
         {
             "name": "qtbase",
             "features": [
-                "widgets",
-                "gui"
+                "gui",
+                "widgets"
             ]
-        }
+        },
+        "qtdeclarative",
+        "qtquickcontrols2",
+        "qt5compat"
     ]
 }

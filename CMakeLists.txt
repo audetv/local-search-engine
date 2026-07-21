@@ -39,11 +39,6 @@ find_package(minizip CONFIG REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 
-# Qt6
-if(BUILD_GUI)
-    find_package(Qt6 REQUIRED COMPONENTS Widgets)
-endif()
-
 include(FetchContent)
 FetchContent_Declare(
     libstemmer
@@ -55,28 +50,14 @@ FetchContent_MakeAvailable(libstemmer)
 # Add core library
 add_subdirectory(src/core)
 
-# Console or GUI executable
+# GUI
 if(BUILD_GUI)
+    find_package(Qt6 REQUIRED COMPONENTS Core Quick QuickControls2)
+    qt_standard_project_setup()
     add_subdirectory(src/ui)
 else()
     add_executable(local-search-engine src/main.cpp)
     target_link_libraries(local-search-engine PRIVATE lse_core)
-    
-    # Sanitizers for console executable
-    if(ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-            target_compile_options(local-search-engine PRIVATE
-                -fsanitize=address,undefined
-                -fno-omit-frame-pointer
-            )
-            target_link_options(local-search-engine PRIVATE
-                -fsanitize=address,undefined
-            )
-        elseif(MSVC)
-            target_compile_options(local-search-engine PRIVATE /fsanitize=address)
-        endif()
-    endif()
-    
     set_target_properties(local-search-engine PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/src"
     )
