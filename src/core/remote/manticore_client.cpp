@@ -46,7 +46,7 @@ namespace lse
         body["highlight"]["limit"] = 0;
         body["highlight"]["encoder"] = "html";
         body["highlight"]["no_match_size"] = 0;
-        body["highlight"]["pre_tags"] = "<span style='background-color: #e1e0e0;'>";
+        body["highlight"]["pre_tags"] = "<span style=\"background-color: #e1e0e0;\">";
         body["highlight"]["post_tags"] = "</span>";
 
         body["limit"] = limit;
