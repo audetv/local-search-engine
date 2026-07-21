@@ -11,9 +11,9 @@ class ResultsWidget : public QWidget
 public:
     explicit ResultsWidget(QWidget *parent = nullptr);
 
-    void addResult(const QString &query, const QString &title,
-                   const QString &author, const QString &genre,
-                   const QString &content);
+    void addResult(const QString &title, const QString &author,
+                   const QString &genre, const QString &content,
+                   float score, const QString &source);
     void clear();
 
 private:

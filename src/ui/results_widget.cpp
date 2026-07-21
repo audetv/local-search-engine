@@ -12,9 +12,9 @@ ResultsWidget::ResultsWidget(QWidget *parent) : QWidget(parent)
     layout->addWidget(list_widget_);
 }
 
-void ResultsWidget::addResult(const QString &query, const QString &title,
-                              const QString &author, const QString &genre,
-                              const QString &content)
+void ResultsWidget::addResult(const QString &title, const QString &author,
+                              const QString &genre, const QString &content,
+                              float score, const QString &source)
 {
     auto *item = new QListWidgetItem();
     auto *widget = new QWidget();

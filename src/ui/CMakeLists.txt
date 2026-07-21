@@ -19,6 +19,21 @@ set_target_properties(local-search-engine-gui PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/src"
 )
 
+# Sanitizers for debug
+if(ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(local-search-engine-gui PRIVATE
+            -fsanitize=address,undefined
+            -fno-omit-frame-pointer
+        )
+        target_link_options(local-search-engine-gui PRIVATE
+            -fsanitize=address,undefined
+        )
+    elseif(MSVC)
+        target_compile_options(local-search-engine-gui PRIVATE /fsanitize=address)
+    endif()
+endif()
+
 # --- АВТОМАТИЧЕСКОЕ КОПИРОВАНИЕ QT ПЛАГИНОВ (ТОЛЬКО ДЛЯ WINDOWS) ---
 if(WIN32)
     # Находим папку с плагинами Qt
