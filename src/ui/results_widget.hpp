@@ -6,7 +6,7 @@
 
 class ResultsWidget : public QWidget
 {
-    Q_OBJECT
+    // Q_OBJECT убран — нет сигналов/слотов
 
 public:
     explicit ResultsWidget(QWidget *parent = nullptr);
@@ -19,7 +19,7 @@ public:
 
 private:
     QListWidget *list_widget_ = nullptr;
-    int font_size_;
+    int font_size_ = 20;
 
     void applyFontSize();
 };
