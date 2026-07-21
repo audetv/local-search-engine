@@ -19,6 +19,11 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+# MSVC: отключаем предупреждения о небезопасных функциях
+if(MSVC)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+endif()
+
 option(BUILD_TESTS "Build unit tests" ON)
 option(ENABLE_SANITIZERS "Enable address/undefined sanitizers" OFF)
 option(BUILD_GUI "Build Qt GUI" ON)
@@ -50,37 +55,28 @@ FetchContent_MakeAvailable(libstemmer)
 # Add core library
 add_subdirectory(src/core)
 
-# Main executable
-add_executable(local-search-engine src/main.cpp)
-target_link_libraries(local-search-engine PRIVATE lse_core)
-
-# Sanitizers for main executable
-if(ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        target_compile_options(local-search-engine PRIVATE
-            -fsanitize=address,undefined
-            -fno-omit-frame-pointer
-        )
-        target_link_options(local-search-engine PRIVATE
-            -fsanitize=address,undefined
-        )
-    elseif(MSVC)
-        target_compile_options(local-search-engine PRIVATE /fsanitize=address)
-    endif()
-endif()
-
-# Положить бинарник рядом с исходниками (удобно)
-set_target_properties(local-search-engine PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/src"
-)
-
-# GUI executable
+# Console or GUI executable
 if(BUILD_GUI)
     add_subdirectory(src/ui)
 else()
-    # Console executable
     add_executable(local-search-engine src/main.cpp)
     target_link_libraries(local-search-engine PRIVATE lse_core)
+    
+    # Sanitizers for console executable
+    if(ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(local-search-engine PRIVATE
+                -fsanitize=address,undefined
+                -fno-omit-frame-pointer
+            )
+            target_link_options(local-search-engine PRIVATE
+                -fsanitize=address,undefined
+            )
+        elseif(MSVC)
+            target_compile_options(local-search-engine PRIVATE /fsanitize=address)
+        endif()
+    endif()
+    
     set_target_properties(local-search-engine PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/src"
     )
@@ -90,7 +86,6 @@ endif()
 if(BUILD_TESTS)
     enable_testing()
     
-    # ASan false positive: отключаем проверки контейнеров для всех тестов
     if(ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
         set(CMAKE_CTEST_ARGUMENTS "--environment;ASAN_OPTIONS=detect_container_overflow=0:detect_odr_violation=0")
     endif()
