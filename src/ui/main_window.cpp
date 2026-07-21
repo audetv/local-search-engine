@@ -16,12 +16,14 @@ MainWindow::MainWindow(QWidget *parent)
     setCentralWidget(central);
 
     auto *layout = new QVBoxLayout(central);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
 
     search_widget_ = new SearchWidget(this);
     results_widget_ = new ResultsWidget(this);
 
     layout->addWidget(search_widget_);
-    layout->addWidget(results_widget_, 1);
+    layout->addWidget(results_widget_); // Убрали stretch factor
 
     connect(search_widget_, &SearchWidget::searchRequested,
             this, &MainWindow::onSearch);

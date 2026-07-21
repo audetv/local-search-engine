@@ -1,12 +1,13 @@
 #pragma once
 
 #include <QWidget>
-#include <QListWidget>
-#include <QListWidgetItem>
+#include <QScrollArea>
+#include <QVBoxLayout>
+#include <QLabel>
 
 class ResultsWidget : public QWidget
 {
-    // Q_OBJECT убран — нет сигналов/слотов
+    Q_OBJECT
 
 public:
     explicit ResultsWidget(QWidget *parent = nullptr);
@@ -17,9 +18,17 @@ public:
     void clear();
     void setFontSize(int size);
 
-private:
-    QListWidget *list_widget_ = nullptr;
-    int font_size_ = 20;
+protected:
+    void resizeEvent(QResizeEvent *event) override;
 
-    void applyFontSize();
+private:
+    QScrollArea *scroll_area_;
+    QWidget *content_widget_;
+    QVBoxLayout *layout_;
+    int font_size_ = 16;
+
+    QWidget *createResultItem(const QString &title, const QString &author,
+                              const QString &genre, const QString &content,
+                              float score, const QString &source);
+    void updateAllItems();
 };
