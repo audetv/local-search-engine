@@ -103,7 +103,7 @@ void MainWindow::performLocalSearch(const QString &query)
             for (const auto &hl : hit->highlights)
             {
                 html += content.mid(last, hl.offset - last).toHtmlEscaped();
-                html += "<mark>" + content.mid(hl.offset, hl.length).toHtmlEscaped() + "</mark>";
+                html += "<span style='background-color: #e1e0e0;'>" + content.mid(hl.offset, hl.length).toHtmlEscaped() + "</span>";
                 last = hl.offset + hl.length;
             }
             html += content.mid(last).toHtmlEscaped();

@@ -9,6 +9,9 @@ ResultsWidget::ResultsWidget(QWidget *parent) : QWidget(parent)
 
     list_widget_ = new QListWidget(this);
     list_widget_->setWordWrap(true);
+    list_widget_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    list_widget_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    list_widget_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     layout->addWidget(list_widget_);
 }
 
@@ -19,18 +22,21 @@ void ResultsWidget::addResult(const QString &title, const QString &author,
     auto *item = new QListWidgetItem();
     auto *widget = new QWidget();
     auto *layout = new QVBoxLayout(widget);
+    layout->setContentsMargins(4, 2, 4, 2);
+    layout->setSpacing(1);
 
-    auto *title_label = new QLabel(QString("<b>%1</b> [%2]").arg(title, genre));
-    title_label->setTextFormat(Qt::RichText);
-
-    auto *author_label = new QLabel(author);
+    auto *header = new QLabel(
+        QString("<b>%1</b> <span style='color: gray;'>[%2]</span> — %3 | score: %4")
+            .arg(title.toHtmlEscaped(), genre.toHtmlEscaped(),
+                 author.toHtmlEscaped(), QString::number(score, 'f', 1)));
+    header->setTextFormat(Qt::RichText);
+    header->setWordWrap(true);
 
     auto *content_label = new QLabel(content);
+    content_label->setTextFormat(Qt::RichText);
     content_label->setWordWrap(true);
-    content_label->setTextFormat(Qt::PlainText);
 
-    layout->addWidget(title_label);
-    layout->addWidget(author_label);
+    layout->addWidget(header);
     layout->addWidget(content_label);
 
     item->setSizeHint(widget->sizeHint());
