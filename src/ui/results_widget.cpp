@@ -15,66 +15,48 @@ ResultsWidget::ResultsWidget(QWidget *parent) : QWidget(parent), font_size_(16)
     list_widget_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     list_widget_->setSelectionMode(QAbstractItemView::NoSelection);
     list_widget_->setUniformItemSizes(false);
+    list_widget_->setStyleSheet("QListWidget { border: none; }");
     layout->addWidget(list_widget_);
-
-    applyFontSize();
 }
 
 void ResultsWidget::setFontSize(int size)
 {
     font_size_ = size;
-    applyFontSize();
-}
-
-void ResultsWidget::applyFontSize()
-{
-    list_widget_->setStyleSheet(
-        QString("QListWidget { font-size: %1px; }").arg(font_size_));
+    list_widget_->update(); // перерисовать
 }
 
 void ResultsWidget::addResult(const QString &title, const QString &author,
                               const QString &genre, const QString &content,
                               float score, const QString &source)
 {
-    // Заменяем \n на <br> для RichText
     QString html_content = content;
     html_content.replace("\n", "<br>");
 
-    QString header_text = QString(
-                              "<p style='margin:0; padding:0;'><b>%1</b> "
-                              "<span style='color: gray;'>[%2] — %3 | %4: %5</span></p>")
-                              .arg(title.toHtmlEscaped(), genre.toHtmlEscaped(),
-                                   author.toHtmlEscaped(), source, QString::number(score, 'f', 1));
+    QString html = QString(
+                       "<div style='font-size:%1px;'>"
+                       "<p style='margin:0; padding:0 0 2px 0;'><b>%2</b> "
+                       "<span style='color: gray; font-size:%3px;'>[%4] — %5 | %6: %7</span></p>"
+                       "<p style='margin:0; padding:0;'>%8</p>"
+                       "</div>")
+                       .arg(font_size_)
+                       .arg(title.toHtmlEscaped())
+                       .arg(font_size_ - 2) // автор чуть мельче
+                       .arg(genre.toHtmlEscaped(), author.toHtmlEscaped(),
+                            source, QString::number(score, 'f', 1))
+                       .arg(html_content);
 
-    auto *widget = new QWidget();
-    widget->setStyleSheet(
-        QString("background: #fafafa; border-bottom: 1px solid #ddd; padding: 2px 4px;"));
-
-    auto *layout = new QVBoxLayout(widget);
-    layout->setContentsMargins(0, 2, 0, 4);
-    layout->setSpacing(0);
-
-    auto *header = new QLabel(header_text);
-    header->setTextFormat(Qt::RichText);
-    header->setWordWrap(true);
-    header->setStyleSheet("padding: 0px; margin: 0px; border: none; background: transparent;");
-
-    auto *content_label = new QLabel(html_content);
-    content_label->setTextFormat(Qt::RichText);
-    content_label->setWordWrap(true);
-    content_label->setStyleSheet(
-        "padding: 0px; margin: 0px; border: none; background: transparent;");
-
-    layout->addWidget(header);
-    layout->addWidget(content_label);
-
-    // Важно: пересчитываем размер после добавления
-    widget->adjustSize();
+    auto *label = new QLabel(html);
+    label->setTextFormat(Qt::RichText);
+    label->setWordWrap(true);
+    label->setStyleSheet(
+        QString("background: #fafafa; border-bottom: 1px solid #ddd; "
+                "padding: 4px 4px 6px 4px; font-size: %1px;")
+            .arg(font_size_));
 
     auto *item = new QListWidgetItem();
-    item->setSizeHint(widget->sizeHint());
+    item->setSizeHint(label->sizeHint());
     list_widget_->addItem(item);
-    list_widget_->setItemWidget(item, widget);
+    list_widget_->setItemWidget(item, label);
 }
 
 void ResultsWidget::clear()
