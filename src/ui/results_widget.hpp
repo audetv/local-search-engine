@@ -18,8 +18,8 @@ public:
     void setFontSize(int size);
 
 private:
-    int font_size_ = 20;
-    QListWidget *list_widget_;
+    QListWidget *list_widget_ = nullptr;
+    int font_size_;
 
     void applyFontSize();
 };

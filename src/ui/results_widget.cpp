@@ -3,7 +3,8 @@
 #include <QLabel>
 #include <QScrollBar>
 
-ResultsWidget::ResultsWidget(QWidget *parent) : QWidget(parent)
+ResultsWidget::ResultsWidget(QWidget *parent)
+    : QWidget(parent), font_size_(20)
 {
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -16,8 +17,6 @@ ResultsWidget::ResultsWidget(QWidget *parent) : QWidget(parent)
     list_widget_->setSelectionMode(QAbstractItemView::NoSelection);
     layout->addWidget(list_widget_);
 
-    // Размер шрифта по умолчанию
-    font_size_ = 20;
     applyFontSize();
 }
 
