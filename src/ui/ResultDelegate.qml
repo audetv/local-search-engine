@@ -114,8 +114,7 @@ Rectangle {
                 
                 // Разрешаем выделение и копирование
                 selectByMouse: true
-                selectionColor: "#4a90d9"
-                selectedTextColor: "white"
+                selectionColor: "#4a90d9"                
             }
         }
     }

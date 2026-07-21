@@ -13,6 +13,93 @@
 - CMake 3.27+
 - vcpkg
 
+
+## Установка
+
+## 1. Установите необходимые пакеты
+
+```bash
+sudo apt update
+sudo apt install -y build-essential cmake ninja-build git pkg-config curl unzip tar
+```
+
+## 2. Установите vcpkg
+
+```bash
+cd ~
+git clone https://github.com/Microsoft/vcpkg.git
+cd vcpkg
+./bootstrap-vcpkg.sh
+```
+
+## 3. Настройте переменную окружения VCPKG_ROOT
+
+Добавьте в ваш ~/.bashrc:
+```bash
+echo 'export VCPKG_ROOT=~/vcpkg' >> ~/.bashrc
+echo 'export PATH=$VCPKG_ROOT:$PATH' >> ~/.bashrc
+source ~/.bashrc
+```
+
+## 4. Поправьте путь в CMakePresets.json
+
+В корне проекта есть файл `CMakePresets.json`. Проверьте, какой там путь к vcpkg:
+Создайте файл CMakeUserPresets.json
+```json
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "default",
+            "inherits": "debug",
+            "environment": {
+                "VCPKG_ROOT": "/home/{user}/vcpkg"
+            }
+        }
+    ]
+}
+```
+
+## 5. Установите зависимости через vcpkg
+
+```bash
+cd ~/projects/local-search-engine
+vcpkg install
+```
+
+## 6. Соберите проект
+
+```bash
+cmake --preset=debug
+cmake --build build/debug
+```
+
+## Альтернативный вариант (если не хотите править CMakePresets.json)
+
+```bash
+cd ~/projects/local-search-engine
+mkdir -p build && cd build
+cmake .. -DCMAKE_TOOLCHAIN_FILE=~/projects/vcpkg/scripts/buildsystems/vcpkg.cmake -G Ninja
+ninja
+```
+
+## Если всё ещё есть проблемы с компилятором
+
+Убедитесь, что установлены компиляторы:
+
+```bash
+sudo apt install -y g++ gcc
+which g++  # должен показать /usr/bin/g++
+which gcc  # должен показать /usr/bin/gcc
+```
+
+Проверьте версии:
+```bash
+g++ --version
+cmake --version
+ninja --version
+```
+
 ## Сборка
 
 ```bash
