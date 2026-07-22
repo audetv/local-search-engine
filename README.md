@@ -20,7 +20,12 @@
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential cmake ninja-build git pkg-config curl unzip tar
+sudo apt install -y build-essential cmake ninja-build git pkg-config curl unzip tar 
+sudo apt-get install flex
+sudo apt install autoconf autoconf-archive automake libtool
+sudo apt-get install '^libxcb.*-dev'
+  libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev
+  libxkbcommon-x11-dev libegl1-mesa-dev
 ```
 
 ## 2. Установите vcpkg

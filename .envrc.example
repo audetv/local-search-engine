@@ -1,0 +1,3 @@
+# local-search-engine/.envrc
+export VCPKG_ROOT="/mnt/work/audetv/projects/vcpkg"
+export VCPKG_DEFAULT_TRIPLET="x64-linux"
